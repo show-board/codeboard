@@ -1,0 +1,155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   CodeBoard 全局样式 - Mac 应用设计风格
+   ============================================================ */
+
+:root {
+  --mac-bg: #f6f6f6;
+  --mac-sidebar: rgba(236, 236, 236, 0.8);
+  --mac-card: rgba(255, 255, 255, 0.9);
+  --mac-border: rgba(0, 0, 0, 0.06);
+  --mac-text: #1d1d1f;
+  --mac-text-secondary: #86868b;
+  --mac-accent: #007AFF;
+  --mac-radius: 12px;
+  --mac-radius-lg: 16px;
+}
+
+/* 暗色模式适配 macOS 系统主题 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mac-bg: #1e1e1e;
+    --mac-sidebar: rgba(44, 44, 46, 0.8);
+    --mac-card: rgba(44, 44, 46, 0.9);
+    --mac-border: rgba(255, 255, 255, 0.08);
+    --mac-text: #f5f5f7;
+    --mac-text-secondary: #98989d;
+    --mac-accent: #0A84FF;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--mac-bg);
+  color: var(--mac-text);
+  user-select: none;
+  -webkit-app-region: no-drag;
+}
+
+/* Mac 原生标题栏拖拽区域 */
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* 自定义滚动条 - Mac 风格 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
+}
+
+/* 毛玻璃效果 */
+@layer components {
+  .glass-card {
+    @apply backdrop-blur-xl bg-white/80 dark:bg-neutral-800/80 
+           rounded-mac-lg border border-mac-border shadow-mac;
+  }
+  .glass-modal {
+    @apply backdrop-blur-2xl bg-white/90 dark:bg-neutral-800/90
+           rounded-mac-xl border border-mac-border shadow-mac-modal;
+  }
+  .blur-overlay {
+    @apply fixed inset-0 bg-black/30 backdrop-blur-sm z-40;
+  }
+}
+
+/* 横向滚动区域 - 触控板丝滑滚动 */
+.scroll-x-smooth {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+}
+
+/* 纵向滚动区域 */
+.scroll-y-smooth {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 项目列滚动条 — 平时隐藏，hover 时渐显 */
+.column-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+.column-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+  transition: background 0.3s;
+}
+.column-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+}
+@media (prefers-color-scheme: dark) {
+  .column-scroll:hover::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+  }
+}
+
+/* 带子裂纹动画 */
+.ribbon-cracked {
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 3px,
+    rgba(0,0,0,0.1) 3px,
+    rgba(0,0,0,0.1) 4px
+  );
+}
+
+/* 运行状态引导：颜色圆点闪烁动画（0.5s 周期） */
+@keyframes status-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.status-blink {
+  animation: status-blink 1s step-end infinite;
+}
+
+/* 全部完成状态：绿色细环呼吸发光 */
+@keyframes status-complete-ring {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.6); }
+  50% { box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.3); }
+}
+.status-complete-ring {
+  animation: status-complete-ring 2s ease-in-out infinite;
+}

@@ -1,0 +1,10 @@
+node_modules/
+out/
+release/
+data/codeboard.sqlite
+data/memories/
+.DS_Store
+*.log
+dist/
+cli/dist/
+cli/node_modules/
