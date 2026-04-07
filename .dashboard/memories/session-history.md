@@ -2,6 +2,17 @@
 
 ## 2026-04-07
 
+### sess_fix_dmg_20260407 — 修复 DMG 分发后「生成 Skills」为空
+- **目标**: 分享打包的 `.dmg` 后，对方应用内魔法棒/Skills 生成器无文件
+- **根因**:
+  1. `electron-builder` 未打入 `skills/codeboard/`，主进程只在 `app.getAppPath()/skills/codeboard` 查找，安装包内不存在该路径
+  2. 回退逻辑请求 `GET /api/skills/generate`，但 **standalone 子进程**（生产环境实际 API）此前未注册该路由（仅 `server/index.ts` 内有），`fetch` 得到 404，文件列表为空
+- **处理**:
+  - `package.json` 增加 `extraResources`，将 `skills/codeboard` 复制到 `Contents/Resources/skills/codeboard`
+  - `electron/main/index.ts` 增加 `resolveSkillsCodeboardDir()`（打包后用 `process.resourcesPath`），磁盘仍无内容时用 API，再用 `generateSkillsTemplate` 本地兜底
+  - `standalone.ts` 注册 `GET /api/skills/generate`，与内嵌 Express 行为一致
+- **关键变更文件**: `package.json`, `electron/main/index.ts`, `electron/main/server/standalone.ts`
+
 ### sess_20260407_fix_sqlite — 修复 API 子进程因 better-sqlite3 架构错误无法监听 2585
 - **目标**: 定位「端口 2585 起不来 / 进程代码 1」根因，修复后在 2585 验证 API
 - **根因**: `better_sqlite3.node` 为 x86_64，本机 Node 为 arm64，`dlopen` 失败导致 standalone 在绑定端口前即退出

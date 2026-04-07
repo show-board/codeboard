@@ -50,6 +50,14 @@
 - **修复**: 右键菜单改用 `createPortal(menu, document.body)` 渲染到 body 层（z-9999），所有按钮添加 `onClick` 和 `onMouseDown` 的 `stopPropagation()`
 - **文件**: `src/components/SessionCard/index.tsx`
 
+### BUG-009: DMG 安装后应用内「生成 Skills」列表为空
+- **现象**: 自源码运行正常；将 `.dmg` 分发给他人后，打开 Skills 生成器无任何文件
+- **原因**:
+  1. 打包产物未包含 `skills/codeboard/`（`electron-builder` 的 `files` 仅有 `out/` 与 `data/`）
+  2. 主进程回退调用 `/api/skills/generate`，但 **standalone** API 进程未实现该路由，返回 404
+- **修复**: `extraResources` 打入完整 `skills/codeboard`；主进程在打包态用 `process.resourcesPath` 解析目录；standalone 增加 `GET /api/skills/generate`；主进程再增加 `generateSkillsTemplate` 本地兜底
+- **文件**: `package.json`, `electron/main/index.ts`, `electron/main/server/standalone.ts`
+
 ### BUG-008: 通知详情弹窗显示为空
 - **现象**: MessageBar 显示未读数量正确，但点击色块打开 NotificationDetail 弹窗后显示"暂无消息记录"
 - **原因**: useEffect 中同时调用 `getProjectNotifications` 和 `markNotificationsRead`，后者触发 store 更新可能产生时序冲突

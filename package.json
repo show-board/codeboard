@@ -74,6 +74,11 @@
       {
         "from": "data",
         "to": "data"
+      },
+      {
+        "from": "skills/codeboard",
+        "to": "skills/codeboard",
+        "filter": ["**/*"]
       }
     ]
   },

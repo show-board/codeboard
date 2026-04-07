@@ -13,6 +13,7 @@ import path from 'path'
 import fs from 'fs'
 import crypto from 'crypto'
 import { CREATE_TABLES_SQL, DEFAULT_SETTINGS, DEFAULT_MEMORY_CATEGORIES } from '../db/schema'
+import { generateSkillsTemplate } from './skillsTemplate'
 
 // 从环境变量或命令行参数获取配置
 const HOST = process.env.CB_HOST || '127.0.0.1'
@@ -71,6 +72,20 @@ app.use((req, _res, next) => {
 // 健康检查
 app.get('/api/health', (_req, res) => {
   res.json({ success: true, message: 'CodeBoard API 运行正常', timestamp: new Date().toISOString() })
+})
+
+// Agent Skills 单文件生成（与 electron/main/server/index.ts 行为一致；DMG 子进程此前缺此路由导致魔法棒为空）
+app.get('/api/skills/generate', (req, res) => {
+  const qh = typeof req.query.host === 'string' ? req.query.host : HOST
+  const qp = typeof req.query.port === 'string' ? req.query.port : String(PORT)
+  const baseUrl = `http://${qh}:${qp}`
+  res.json({
+    success: true,
+    data: {
+      filename: 'SKILL.md',
+      content: generateSkillsTemplate(baseUrl)
+    }
+  })
 })
 
 // ---- 项目路由 ----

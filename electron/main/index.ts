@@ -8,6 +8,7 @@ import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, Notification, she
 import { spawn, ChildProcess, execSync } from 'child_process'
 import path from 'path'
 import fs from 'fs'
+import { generateSkillsTemplate } from './server/skillsTemplate'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -267,6 +268,18 @@ function createTray() {
  * 安全调用 API，失败时返回默认值而非抛出异常
  * 避免服务器未启动时前端 IPC 调用全部崩溃导致白屏
  */
+/**
+ * 定位 skills/codeboard 目录
+ * - 开发：仓库根下 skills/codeboard（app.getAppPath() 指向应用根）
+ * - 打包：electron-builder extraResources 置于 Contents/Resources/skills/codeboard
+ */
+function resolveSkillsCodeboardDir(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'skills', 'codeboard')
+  }
+  return path.join(app.getAppPath(), 'skills', 'codeboard')
+}
+
 async function safeApiGet<T>(path: string, fallback: T): Promise<T> {
   try {
     const r = await apiGet(path) as Record<string, unknown>
@@ -356,9 +369,8 @@ function registerIpcHandlers() {
 
   // ---- Skills 目录包：读取 skills/codeboard/ 下所有文件并返回文件树 ----
   ipcMain.handle('get-skills-bundle', async () => {
-    // 尝试从仓库目录读取 skills 文件
-    const appRoot = app.getAppPath()
-    const skillsDir = path.join(appRoot, 'skills', 'codeboard')
+    // 从磁盘读取完整 skills（打包后依赖 extraResources）
+    const skillsDir = resolveSkillsCodeboardDir()
     const files: { path: string; name: string; content: string }[] = []
 
     try {
@@ -387,15 +399,19 @@ function registerIpcHandlers() {
       console.warn('[IPC] 读取 skills 目录失败:', (err as Error).message)
     }
 
-    // 如果读取失败（如打包环境无仓库），使用生成器产出单文件
+    // 磁盘无完整包时：先请求子进程 API，再本地模板兜底（避免服务未就绪或旧版 standalone 无路由）
     if (files.length === 0) {
       try {
-        const r = await apiGet(`/api/skills/generate?host=${currentHost}&port=${currentPort}`) as Record<string, unknown>
-        const data = r.data as { content: string }
+        const r = await apiGet(`/api/skills/generate?host=${encodeURIComponent(currentHost)}&port=${encodeURIComponent(String(currentPort))}`) as Record<string, unknown>
+        const data = r.data as { content?: string }
         if (data?.content) {
           files.push({ path: 'SKILL.md', name: 'SKILL.md', content: data.content })
         }
       } catch { /* 忽略 */ }
+    }
+    if (files.length === 0) {
+      const baseUrl = `http://${currentHost}:${currentPort}`
+      files.push({ path: 'SKILL.md', name: 'SKILL.md', content: generateSkillsTemplate(baseUrl) })
     }
 
     return { success: true, files }
