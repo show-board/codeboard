@@ -19,6 +19,12 @@
 - **修复**: 启动时自动尝试 2585-2596 共 12 个端口，找到可用端口后写入 settings
 - **文件**: `electron/main/index.ts`
 
+### BUG-007: Apple Silicon 上 better-sqlite3 为 x86_64，子进程立即崩溃
+- **现象**: `pnpm dev` 时 2585–2596 全部「就绪前退出（代码 1）」；日志为 `ERR_DLOPEN_FAILED`，`have 'x86_64', need 'arm64'`
+- **原因**: `node_modules` 中的 `better_sqlite3.node` 在 Intel/Rosetta 或错误架构下安装/预编译，与当前 arm64 Node 不匹配（非端口占用）
+- **修复**: 在项目根执行 `pnpm rebuild better-sqlite3`（或删 `node_modules` 后在 arm64 终端重装）；确认 `file .../better_sqlite3.node` 显示 `arm64`
+- **预防**: 在 Apple Silicon 上避免用 Rosetta 终端跑 `pnpm install`；换机或拷贝依赖后若 API 起不来优先检查原生模块架构
+
 ## React/前端 相关
 
 ### BUG-004: Zustand selector 导致无限循环

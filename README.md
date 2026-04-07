@@ -2,15 +2,21 @@
 
 CodeBoard is a macOS desktop application designed specifically for VibeCoding (AI-driven programming) scenarios. It is used to manage the real-time status, task progress, and project memory of multiple AI Agent projects.
 
+![init_img](docs/asset/init.png)
+
 ## Core Features
 
-* **Multi-Project Kanban** — A horizontally scrollable project column view that displays the status of each project's session and tasks in real time.
-* **Task Tracking** — AI Agents report task progress via API/CLI, and the board automatically updates and sends system notifications.
-* **Project Memory** — Categorized management of project knowledge bases (e.g., development structures, technical solutions, bug records), with Agents able to read and update information with each conversation.
-* **Multi-Agent Support** — Supports integration with major AI Agents such as Cursor Agent, Claude Code, and OpenClaw.
-* **Mac Native Experience** — Features such as frosted glass effects, system tray, system notifications, and a hidden title bar.
+- **Multi-Project Kanban** — A horizontally scrollable project column view that displays the status of each project's session and tasks in real time.
+- **Task Tracking** — AI Agents report task progress via API/CLI, and the board automatically updates and sends system notifications.
+- **Project Memory** — Categorized management of project knowledge bases (e.g., development structures, technical solutions, bug records), with Agents able to read and update information with each conversation.
+- **Multi-Agent Support** — Supports integration with major AI Agents such as Cursor Agent, Claude Code, and OpenClaw.
+- **Mac Native Experience** — Features such as frosted glass effects, system tray, system notifications, and a hidden title bar.
+
+![app runing img](docs/asset/page_large.png)
+![multi-project manage](docs/asset/run.png)
 
 ## Technology Stack
+
 
 | Layer              | Technology                           |
 | ------------------ | ------------------------------------ |
@@ -22,9 +28,11 @@ CodeBoard is a macOS desktop application designed specifically for VibeCoding (A
 | Build Tools        | electron-vite + Vite 6               |
 | Package Management | pnpm                                 |
 
+
 ## Quick Start
 
 ### System Requirements
+
 
 | Dependency      | Version           | Notes                     |
 | --------------- | ----------------- | ------------------------- |
@@ -33,6 +41,7 @@ CodeBoard is a macOS desktop application designed specifically for VibeCoding (A
 | pnpm            | >= 9.x            | Package manager           |
 | Xcode CLI Tools | Latest            | Native module compilation |
 | Python          | 3.x               | node-gyp dependency       |
+
 
 ### Installation from Source
 
@@ -151,11 +160,13 @@ npx node-gyp rebuild \
 
 CodeBoard uses Skill files to guide AI Agents in automatically connecting to the kanban. It supports various agents:
 
+
 | Agent        | Installation Guide                                               |
 | ------------ | ---------------------------------------------------------------- |
 | Cursor Agent | [docs/AGENT-SETUP-CURSOR.md](docs/AGENT-SETUP-CURSOR.md)         |
 | Claude Code  | [docs/AGENT-SETUP-CLAUDECODE.md](docs/AGENT-SETUP-CLAUDECODE.md) |
 | OpenClaw     | [docs/AGENT-SETUP-OPENCLEW.md](docs/AGENT-SETUP-OPENCLEW.md)     |
+
 
 ---
 
@@ -194,6 +205,7 @@ codeboard/
 
 ## Documentation Index
 
+
 | Document                                                 | Description                                    |
 | -------------------------------------------------------- | ---------------------------------------------- |
 | [docs/INSTALL.md](docs/INSTALL.md)                       | Application installation and setup             |
@@ -201,6 +213,7 @@ codeboard/
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)             | System architecture design                     |
 | [skills/codeboard/SKILL.md](skills/codeboard/SKILL.md)   | Main Skill for Agent Kanban integration        |
 | [docs/AGENT-SETUP-CURSOR.md](docs/AGENT-SETUP-CURSOR.md) | Cursor Rules + Skills installation (must-read) |
+
 
 ## Open Source License
 

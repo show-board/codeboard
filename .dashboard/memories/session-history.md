@@ -1,5 +1,13 @@
 # Session 历史记录
 
+## 2026-04-07
+
+### sess_20260407_fix_sqlite — 修复 API 子进程因 better-sqlite3 架构错误无法监听 2585
+- **目标**: 定位「端口 2585 起不来 / 进程代码 1」根因，修复后在 2585 验证 API
+- **根因**: `better_sqlite3.node` 为 x86_64，本机 Node 为 arm64，`dlopen` 失败导致 standalone 在绑定端口前即退出
+- **处理**: 执行 `pnpm rebuild better-sqlite3`，原生模块变为 arm64
+- **验证**: `CB_PORT=2585 node out/main/server/standalone.js` 启动成功；`curl http://127.0.0.1:2585/api/health` 返回 `success: true`
+
 ## 2026-04-05
 
 ### sess_20260405_220100 — 看板 UI 九项优化（信息展示+交互增强+功能新增+Bug修复）
