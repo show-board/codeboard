@@ -1,215 +1,207 @@
-# CodeBoard - VibeCoding 多项目看板
+# CodeBoard - VibeCoding Multi-Project Kanban
 
-CodeBoard 是一款专为 VibeCoding（AI 驱动编程）场景设计的 macOS 桌面应用，用于管理多个 AI Agent 项目的实时状态、任务进度、项目记忆。
+CodeBoard is a macOS desktop application designed specifically for VibeCoding (AI-driven programming) scenarios. It is used to manage the real-time status, task progress, and project memory of multiple AI Agent projects.
 
-## 核心功能
+## Core Features
 
-- **多项目看板** — 横向滚动的项目列视图，实时展示各项目 Session 和任务状态
-- **任务追踪** — AI Agent 通过 API/CLI 上报任务进度，看板自动更新并推送系统通知
-- **项目记忆** — 分类管理项目知识库（开发结构、技术方案、Bug 记录等），Agent 每次对话可读取和更新
-- **多 Agent 支持** — 支持 Cursor Agent、Claude Code、OpenClaw 等主流 AI Agent 对接
-- **Mac 原生体验** — 毛玻璃效果、系统托盘、系统通知，隐藏式标题栏
+* **Multi-Project Kanban** — A horizontally scrollable project column view that displays the status of each project's session and tasks in real time.
+* **Task Tracking** — AI Agents report task progress via API/CLI, and the board automatically updates and sends system notifications.
+* **Project Memory** — Categorized management of project knowledge bases (e.g., development structures, technical solutions, bug records), with Agents able to read and update information with each conversation.
+* **Multi-Agent Support** — Supports integration with major AI Agents such as Cursor Agent, Claude Code, and OpenClaw.
+* **Mac Native Experience** — Features such as frosted glass effects, system tray, system notifications, and a hidden title bar.
 
-## 技术栈
+## Technology Stack
 
+| Layer              | Technology                           |
+| ------------------ | ------------------------------------ |
+| Desktop Framework  | Electron 33                          |
+| Frontend           | React 18 + TypeScript + Tailwind CSS |
+| State Management   | Zustand                              |
+| Animation          | Framer Motion                        |
+| Backend API        | Express + better-sqlite3             |
+| Build Tools        | electron-vite + Vite 6               |
+| Package Management | pnpm                                 |
 
-| 层级     | 技术                                   |
-| ------ | ------------------------------------ |
-| 桌面框架   | Electron 33                          |
-| 前端     | React 18 + TypeScript + Tailwind CSS |
-| 状态管理   | Zustand                              |
-| 动画     | Framer Motion                        |
-| 后端 API | Express + better-sqlite3             |
-| 构建工具   | electron-vite + Vite 6               |
-| 包管理    | pnpm                                 |
+## Quick Start
 
+### System Requirements
 
-## 快速开始
+| Dependency      | Version           | Notes                     |
+| --------------- | ----------------- | ------------------------- |
+| macOS           | >= 13.0 (Ventura) | Desktop app runtime       |
+| Node.js         | >= 20.x           | Runtime (LTS recommended) |
+| pnpm            | >= 9.x            | Package manager           |
+| Xcode CLI Tools | Latest            | Native module compilation |
+| Python          | 3.x               | node-gyp dependency       |
 
-### 环境要求
-
-
-| 依赖              | 版本                | 说明             |
-| --------------- | ----------------- | -------------- |
-| macOS           | >= 13.0 (Ventura) | 桌面应用运行环境       |
-| Node.js         | >= 20.x           | 运行时（推荐 LTS 版本） |
-| pnpm            | >= 9.x            | 包管理器           |
-| Xcode CLI Tools | 最新                | native 模块编译    |
-| Python          | 3.x               | node-gyp 依赖    |
-
-
-### 从源码安装
+### Installation from Source
 
 ```bash
-# 1. 克隆仓库
+# 1. Clone the repository
 git clone <repo-url> codeboard
 cd codeboard
 
-# 2. 安装 pnpm（如果尚未安装）
+# 2. Install pnpm (if not already installed)
 npm install -g pnpm
 
-# 3. 安装项目依赖
+# 3. Install project dependencies
 pnpm install
 
-# 4. 启动开发模式
+# 4. Start in development mode
 pnpm dev
 ```
 
-启动后会自动打开 CodeBoard 桌面应用，API 服务默认监听 `http://127.0.0.1:2585`。
+After startup, the CodeBoard desktop app will open automatically, and the API server will listen on `http://127.0.0.1:2585`.
 
-### 构建与打包
+### Build and Package
 
 ```bash
-# 构建生产版本
+# Build the production version
 pnpm build
 
-# 打包为 macOS .dmg 安装包
+# Package as macOS .dmg installer
 pnpm dist
 
-cd /Users/likun/workspace/remote/codeboard && npx electron-builder --mac --arm64 2>&1
+cd codeboard && npx electron-builder --mac --arm64 2>&1
 
-cd /Users/likun/workspace/remote/codeboard && npx electron-builder --mac --x64 2>&1
+cd scodeboard && npx electron-builder --mac --x64 2>&1
 ```
 
-打包产物位于 `release/` 目录。
+The packaged output will be located in the `release/` directory.
 
-### 安装 CLI 工具
+### Install CLI Tool
 
 ```bash
 cd cli
 pnpm install && pnpm build
 npm install -g .
 
-# 验证
+# Verify
 codeboard --help
 ```
 
 ---
 
-## 网络问题与镜像配置
+## Network Issues & Mirror Configuration
 
-在国内环境中，`pnpm install` 或打包时可能因网络问题导致依赖下载失败。以下是推荐的镜像配置：
+In environments with network restrictions, `pnpm install` or packaging may fail to download dependencies. Below are recommended mirror configurations:
 
-### npm/pnpm 镜像
+### npm/pnpm Mirror
 
 ```bash
-# 使用淘宝 npm 镜像
+# Use the Taobao npm mirror
 pnpm config set registry https://registry.npmmirror.com
 
-# 或使用华为云镜像
+# Or use Huawei Cloud mirror
 pnpm config set registry https://mirrors.huaweicloud.com/repository/npm/
 ```
 
-### Electron 下载镜像
+### Electron Download Mirror
 
-打包时需要下载 Electron 二进制文件，建议配置镜像：
+Packaging requires downloading Electron binaries. It’s recommended to configure a mirror:
 
 ```bash
-# 方式一：设置环境变量（推荐）
+# Option 1: Set environment variables (recommended)
 export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
 export ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
 
-# 方式二：写入 .npmrc 文件（永久生效）
+# Option 2: Write to .npmrc file (permanent effect)
 cat >> .npmrc << 'EOF'
 electron_mirror=https://npmmirror.com/mirrors/electron/
 electron_builder_binaries_mirror=https://npmmirror.com/mirrors/electron-builder-binaries/
 EOF
 
-# 然后重新打包
+# Then rebuild the package
 pnpm dist
 ```
 
-### 手动下载 Electron（备选方案）
+### Manually Download Electron (Fallback)
 
-如果镜像也不可用，可以手动下载 Electron 并放置到缓存目录：
+If mirrors are unavailable, you can manually download Electron and place it in the cache directory:
 
 ```bash
-# 1. 在浏览器中下载对应版本（以 v33.4.11 arm64 为例）
+# 1. Download the corresponding version (e.g., v33.4.11 arm64)
 # https://npmmirror.com/mirrors/electron/33.4.11/electron-v33.4.11-darwin-arm64.zip
 
-# 2. 放到 Electron 缓存目录
+# 2. Place it in the Electron cache directory
 mkdir -p ~/Library/Caches/electron
 cp electron-v33.4.11-darwin-arm64.zip ~/Library/Caches/electron/
 
-# 3. 重新打包
+# 3. Rebuild the package
 pnpm dist
 ```
 
-### node-gyp / better-sqlite3 编译问题
+### node-gyp / better-sqlite3 Compilation Issues
 
 ```bash
-# 确保 Xcode CLI Tools 已安装
+# Ensure Xcode CLI Tools are installed
 xcode-select --install
 
-# 确保 Python 3 可用
+# Ensure Python 3 is available
 python3 --version
 
-# 如果 better-sqlite3 ABI 版本不匹配，手动重新编译
+# If better-sqlite3 ABI version mismatch occurs, manually rebuild
 npx node-gyp rebuild \
   --directory=node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3
 ```
 
 ---
 
-## 配置 AI Agent
+## Configure AI Agents
 
-CodeBoard 通过 Skill 文件指导 AI Agent 自动对接看板，支持多种 Agent：
+CodeBoard uses Skill files to guide AI Agents in automatically connecting to the kanban. It supports various agents:
 
-
-| Agent        | 安装指南                                                             |
+| Agent        | Installation Guide                                               |
 | ------------ | ---------------------------------------------------------------- |
 | Cursor Agent | [docs/AGENT-SETUP-CURSOR.md](docs/AGENT-SETUP-CURSOR.md)         |
 | Claude Code  | [docs/AGENT-SETUP-CLAUDECODE.md](docs/AGENT-SETUP-CLAUDECODE.md) |
 | OpenClaw     | [docs/AGENT-SETUP-OPENCLEW.md](docs/AGENT-SETUP-OPENCLEW.md)     |
 
-
 ---
 
-## 项目结构
+## Project Structure
 
 ```
 codeboard/
-├── electron/              # Electron 主进程 + 预加载脚本
+├── electron/              # Electron main process + preload scripts
 │   ├── main/
-│   │   ├── index.ts       # 主进程入口（窗口、托盘、IPC）
-│   │   ├── server/        # API 服务器（独立子进程运行）
-│   │   ├── db/            # 数据库 Schema
-│   │   └── services/      # 业务服务（记忆、通知、推荐）
+│   │   ├── index.ts       # Main process entry (window, tray, IPC)
+│   │   ├── server/        # API server (runs in a separate process)
+│   │   ├── db/            # Database schema
+│   │   └── services/      # Business services (memory, notifications, recommendations)
 │   └── preload/
-│       └── index.ts       # 上下文桥接（contextBridge）
-├── src/                   # 渲染进程（React）
-│   ├── App.tsx            # 根组件
-│   ├── components/        # UI 组件（Board、Sidebar、Modals 等）
-│   ├── stores/            # Zustand 状态管理
-│   ├── hooks/             # 自定义 Hooks
-│   ├── types/             # TypeScript 类型定义
-│   └── styles/            # 全局 CSS
-├── cli/                   # CodeBoard CLI 工具
+│       └── index.ts       # Context bridge (contextBridge)
+├── src/                   # Renderer process (React)
+│   ├── App.tsx            # Root component
+│   ├── components/        # UI components (Board, Sidebar, Modals, etc.)
+│   ├── stores/            # Zustand state management
+│   ├── hooks/             # Custom hooks
+│   ├── types/             # TypeScript type definitions
+│   └── styles/            # Global CSS
+├── cli/                   # CodeBoard CLI tool
 ├── skills/                # Agent Skills
-│   ├── codeboard/         # 看板对接主 Skill（SKILL.md + references/）
-│   └── install-codeboard-skills/  # Cursor 安装指引（链到 ~/.cursor/skills）
-├── docs/                  # 文档
-│   ├── API.md             # API 接口文档
-│   ├── ARCHITECTURE.md    # 架构设计
-│   ├── INSTALL.md         # 应用安装指南
-│   └── AGENT-SETUP-*.md   # 各 Agent 安装指南
-└── test/                  # 测试脚本
+│   ├── codeboard/         # Main Skill for Kanban integration (SKILL.md + references/)
+│   └── install-codeboard-skills/  # Cursor installation guide (linked to ~/.cursor/skills)
+├── docs/                  # Documentation
+│   ├── API.md             # API documentation
+│   ├── ARCHITECTURE.md    # Architecture design
+│   ├── INSTALL.md         # Installation guide
+│   └── AGENT-SETUP-*.md   # Agent setup guides
+└── test/                  # Test scripts
 ```
 
 ---
 
-## 文档索引
+## Documentation Index
 
+| Document                                                 | Description                                    |
+| -------------------------------------------------------- | ---------------------------------------------- |
+| [docs/INSTALL.md](docs/INSTALL.md)                       | Application installation and setup             |
+| [docs/API.md](docs/API.md)                               | REST API documentation                         |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)             | System architecture design                     |
+| [skills/codeboard/SKILL.md](skills/codeboard/SKILL.md)   | Main Skill for Agent Kanban integration        |
+| [docs/AGENT-SETUP-CURSOR.md](docs/AGENT-SETUP-CURSOR.md) | Cursor Rules + Skills installation (must-read) |
 
-| 文档                                                       | 说明                           |
-| -------------------------------------------------------- | ---------------------------- |
-| [docs/INSTALL.md](docs/INSTALL.md)                       | 应用安装与运行指南                    |
-| [docs/API.md](docs/API.md)                               | REST API 接口文档                |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)             | 系统架构设计                       |
-| [skills/codeboard/SKILL.md](skills/codeboard/SKILL.md)   | Agent 看板对接主 Skill            |
-| [docs/AGENT-SETUP-CURSOR.md](docs/AGENT-SETUP-CURSOR.md) | Cursor Rules + Skills 安装（必读） |
-
-
-## 开源协议
+## Open Source License
 
 [Apache-2.0 license](https://github.com/show-board/codeboard#Apache-2.0-1-ov-file)
