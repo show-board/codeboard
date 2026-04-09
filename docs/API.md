@@ -101,6 +101,70 @@
 
 ---
 
+## Hooks 轨迹（新增）
+
+### POST /api/hooks/events
+上报单条 hooks 触发事件（Cursor / Claude Code / OpenClaw 通用）。
+
+**请求体:**
+```json
+{
+  "project_id": "proj_20260404153500",
+  "session_id": "sess_20260404160000",
+  "agent_type": "cursor | claudecode | openclaw",
+  "hook_event_name": "postToolUse",
+  "status": "success | error",
+  "payload": {
+    "tool_name": "Shell",
+    "command": "pnpm test"
+  }
+}
+```
+
+说明：
+- 必填：`project_id`、`session_id`、`hook_event_name`
+- 若 session 不存在，服务端会自动创建兜底 session 以保证轨迹不丢失
+- 事件会自动分类为 `mcp`、`tool_call`、`file_write`、`shell` 等统计口径
+
+### GET /api/hooks/sessions/:sessionId
+获取指定 Session 的 hooks 统计和明细。
+
+可选 Query：
+- `limit`（默认 `300`，最大 `1000`）
+
+**响应示例:**
+```json
+{
+  "success": true,
+  "data": {
+    "stats": {
+      "total_events": 124,
+      "mcp_count": 8,
+      "tool_call_count": 42,
+      "file_write_count": 16,
+      "shell_count": 9,
+      "error_count": 2,
+      "last_event_at": "2026-04-10 14:03:12",
+      "category_counts": [{ "event_category": "tool_call", "count": 42 }],
+      "hook_name_counts": [{ "hook_event_name": "postToolUse", "count": 31 }]
+    },
+    "events": [
+      {
+        "id": 1,
+        "agent_type": "cursor",
+        "hook_event_name": "postToolUse",
+        "event_category": "tool_call",
+        "status": "success",
+        "summary": "postToolUse: Shell",
+        "payload": {}
+      }
+    ]
+  }
+}
+```
+
+---
+
 ## 记忆管理
 
 ### GET /api/memories/:projectId/categories

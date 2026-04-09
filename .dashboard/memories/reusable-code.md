@@ -68,3 +68,34 @@ function startServerProcess(host: string, port: number): Promise<void>
 
 ### generateSkillsTemplate (`electron/main/server/skillsTemplate.ts`)
 根据 baseUrl 生成单文件 Skills Markdown（YAML frontmatter + 流程与 curl 示例）；由 `index.ts` 的 `GET /api/skills/generate` 调用。
+
+## Hooks 统计相关（2026-04-10）
+
+### ExpandedHooksPanel (`src/components/Board/ExpandedHooksPanel.tsx`)
+全屏模式右侧 hooks 统计面板组件：
+- 读取 `/api/hooks/sessions/:sessionId`
+- 展示 `MCP / ToolCall / 文件写入 / 全部事件` 统计卡
+- 支持点击统计卡筛选事件明细
+
+### addHookEvent / getHookStatsBySession (`electron/main/db/index.ts`)
+- `addHookEvent(data)`：落库单条 hooks 事件，自动分类与摘要
+- `getHookStatsBySession(sessionId)`：返回会话级聚合统计（含分类计数）
+- `getHookEventsBySession(sessionId, limit)`：返回按时间倒序的 hooks 明细
+
+## hooks 安装与桥接脚本（2026-04-10）
+
+### install-hooks-cursor.sh / install-hooks-claudecode.sh / install-hooks-openclaw.sh（`scripts/`）
+- 一键安装 hooks 模板与脚本
+- 自动备份旧配置（Cursor/Claude）
+- 降低新机器初始化成本
+
+### install-hooks-all.sh（`scripts/install-hooks-all.sh`）
+- 总控安装入口：自动检测 Cursor / Claude Code / OpenClaw
+- 只安装检测到的 Agent（`--all` 可强制安装全部）
+- 对未检测到的 Agent 给出差异化提示（skip + next step）
+
+### codeboard_cursor_event.sh / codeboard_claude_event.sh（`docs/hooks_templates/*/hooks/`）
+- 将 hooks 事件同时转发到：
+  - `/api/tasks/update`（仅 session_start）
+  - `/api/hooks/events`（轨迹审计）
+- 不再根据 ToolUse 自动推导 task 状态，task 由 skills 指导 Agent 手动发送

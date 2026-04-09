@@ -41,9 +41,20 @@ interface ProjectColumnProps {
   headerOnly?: boolean
   /** 仅渲染卡片内容区（展开模式下标题独立） */
   bodyOnly?: boolean
+  /** 选择中的 Session（用于全屏模式联动右侧面板） */
+  selectedSessionId?: string | null
+  /** 选中 Session 回调（用于全屏模式联动右侧面板） */
+  onSelectSession?: (sessionId: string) => void
 }
 
-export default function ProjectColumn({ project, expanded = false, headerOnly = false, bodyOnly = false }: ProjectColumnProps) {
+export default function ProjectColumn({
+  project,
+  expanded = false,
+  headerOnly = false,
+  bodyOnly = false,
+  selectedSessionId = null,
+  onSelectSession
+}: ProjectColumnProps) {
   // 避免在 selector 中创建新数组引用导致无限循环
   const allSessions = useProjectStore(s => s.sessions)
   const sessions = useMemo(
@@ -197,6 +208,9 @@ export default function ProjectColumn({ project, expanded = false, headerOnly = 
               color={project.color}
               isLast={index === 0}
               collapsed={shouldCollapse}
+              selectMode={!!onSelectSession}
+              selected={selectedSessionId === session.session_id}
+              onSelect={onSelectSession}
             />
           )
         })

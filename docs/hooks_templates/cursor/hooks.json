@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh sessionStart"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh sessionEnd"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh preToolUse"
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh postToolUse"
+      }
+    ],
+    "postToolUseFailure": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh postToolUseFailure"
+      }
+    ],
+    "subagentStart": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh subagentStart"
+      }
+    ],
+    "subagentStop": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh subagentStop"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh beforeShellExecution"
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh afterShellExecution"
+      }
+    ],
+    "beforeMCPExecution": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh beforeMCPExecution"
+      }
+    ],
+    "afterMCPExecution": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh afterMCPExecution"
+      }
+    ],
+    "beforeReadFile": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh beforeReadFile"
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh afterFileEdit"
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh beforeSubmitPrompt"
+      }
+    ],
+    "preCompact": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh preCompact"
+      }
+    ],
+    "stop": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh stop"
+      }
+    ],
+    "afterAgentResponse": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh afterAgentResponse"
+      }
+    ],
+    "afterAgentThought": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh afterAgentThought"
+      }
+    ],
+    "beforeTabFileRead": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh beforeTabFileRead"
+      }
+    ],
+    "afterTabFileEdit": [
+      {
+        "command": "./hooks/codeboard_cursor_event.sh afterTabFileEdit"
+      }
+    ]
+  }
+}
+

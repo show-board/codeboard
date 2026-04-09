@@ -57,6 +57,47 @@ function generateUniqueColor(): string {
     : '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')
 }
 
+function classifyHookEvent(hookEventName: string, payload: Record<string, unknown>): string {
+  const name = hookEventName.toLowerCase()
+  const toolName = String(payload.tool_name || payload.toolName || '').toLowerCase()
+
+  if (name.includes('mcp') || toolName.startsWith('mcp__')) return 'mcp'
+  if (name.includes('subagent')) return 'subagent'
+  if (name.includes('compact')) return 'compact'
+  if (name.includes('session') || name === 'stop') return 'session'
+  if (name.includes('shell') || toolName === 'bash' || toolName === 'shell') return 'shell'
+  if (
+    name.includes('fileedit') ||
+    name.includes('tabfileedit') ||
+    ['write', 'edit', 'multiedit'].includes(toolName) ||
+    Array.isArray(payload.edits)
+  ) {
+    return 'file_write'
+  }
+  if (
+    name.includes('readfile') ||
+    name.includes('tabfileread') ||
+    ['read', 'glob', 'grep'].includes(toolName)
+  ) {
+    return 'file_read'
+  }
+  if (name.includes('tooluse') || toolName) return 'tool_call'
+  if (name.includes('message') || name.includes('notification')) return 'message'
+  return 'other'
+}
+
+function summarizeHookEvent(hookEventName: string, payload: Record<string, unknown>): string {
+  const command = String(payload.command || '')
+  if (command) return `${hookEventName}: ${command.slice(0, 120)}`
+  const toolName = String(payload.tool_name || payload.toolName || '')
+  if (toolName) return `${hookEventName}: ${toolName}`
+  const filePath = String(payload.file_path || payload.filePath || '')
+  if (filePath) return `${hookEventName}: ${filePath}`
+  const message = String(payload.message || '')
+  if (message) return `${hookEventName}: ${message.slice(0, 120)}`
+  return hookEventName
+}
+
 // ---- Express App ----
 
 const app = express()
@@ -148,6 +189,7 @@ app.delete('/api/projects/:pid', (req, res) => {
   const p = db.prepare('SELECT status FROM projects WHERE project_id = ?').get(req.params.pid) as { status: string } | undefined
   if (!p) return res.status(404).json({ success: false, error: '项目不存在' })
   if (p.status !== 'trashed') return res.status(400).json({ success: false, error: '只能删除垃圾篓中的项目' })
+  db.prepare('DELETE FROM hook_events WHERE project_id = ?').run(req.params.pid)
   db.prepare('DELETE FROM task_updates WHERE project_id = ?').run(req.params.pid)
   db.prepare('DELETE FROM sessions WHERE project_id = ?').run(req.params.pid)
   db.prepare('DELETE FROM memory_documents WHERE project_id = ?').run(req.params.pid)
@@ -214,6 +256,7 @@ app.patch('/api/sessions/:sid/restore', (req, res) => {
 })
 
 app.delete('/api/sessions/:sid/permanent', (req, res) => {
+  db.prepare('DELETE FROM hook_events WHERE session_id = ?').run(req.params.sid)
   db.prepare('DELETE FROM task_updates WHERE session_id = ?').run(req.params.sid)
   db.prepare('DELETE FROM sessions WHERE session_id = ?').run(req.params.sid)
   res.json({ success: true })
@@ -222,6 +265,7 @@ app.delete('/api/sessions/:sid/permanent', (req, res) => {
 app.delete('/api/sessions/trashed/clear', (_req, res) => {
   const trashed = db.prepare('SELECT session_id FROM sessions WHERE is_trashed = 1').all() as { session_id: string }[]
   for (const s of trashed) {
+    db.prepare('DELETE FROM hook_events WHERE session_id = ?').run(s.session_id)
     db.prepare('DELETE FROM task_updates WHERE session_id = ?').run(s.session_id)
   }
   db.prepare('DELETE FROM sessions WHERE is_trashed = 1').run()
@@ -276,6 +320,106 @@ app.post('/api/tasks/update', (req, res) => {
 
 app.get('/api/tasks/:sid', (req, res) => {
   res.json({ success: true, data: db.prepare('SELECT * FROM task_updates WHERE session_id = ? ORDER BY created_at ASC').all(req.params.sid) })
+})
+
+// ---- Hooks 事件路由 ----
+
+app.post('/api/hooks/events', (req, res) => {
+  const { project_id, session_id, agent_type, hook_event_name, status, payload } = req.body || {}
+  if (!project_id || !session_id || !hook_event_name) {
+    return res.status(400).json({ success: false, error: '缺少必要字段: project_id, session_id, hook_event_name' })
+  }
+
+  const project = db.prepare('SELECT * FROM projects WHERE project_id = ?').get(project_id)
+  if (!project) {
+    return res.status(404).json({ success: false, error: '项目不存在，请先完成 project 初始化与注册' })
+  }
+
+  const existingSession = db.prepare('SELECT session_id FROM sessions WHERE session_id = ?').get(session_id)
+  if (!existingSession) {
+    db.prepare('INSERT INTO sessions (session_id, project_id, goal, task_list_json, status) VALUES (?, ?, ?, ?, ?)')
+      .run(session_id, project_id, 'hooks 自动创建 session', '[]', 'running')
+  }
+
+  const safePayload = (typeof payload === 'object' && payload !== null) ? payload as Record<string, unknown> : {}
+  const category = classifyHookEvent(String(hook_event_name), safePayload)
+  const summary = summarizeHookEvent(String(hook_event_name), safePayload)
+
+  const result = db.prepare(
+    `INSERT INTO hook_events
+      (project_id, session_id, agent_type, hook_event_name, event_category, status, summary, payload_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    project_id,
+    session_id,
+    String(agent_type || 'unknown'),
+    String(hook_event_name),
+    category,
+    status === 'error' ? 'error' : 'success',
+    summary,
+    JSON.stringify(safePayload)
+  )
+
+  db.prepare("UPDATE sessions SET updated_at = datetime('now', 'localtime') WHERE session_id = ?").run(session_id)
+  db.prepare("UPDATE projects SET updated_at = datetime('now', 'localtime') WHERE project_id = ?").run(project_id)
+
+  res.json({ success: true, id: result.lastInsertRowid, event_category: category, summary })
+})
+
+app.get('/api/hooks/sessions/:sid', (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit || 300), 1), 1000)
+  const sid = req.params.sid
+
+  const stats = db.prepare(
+    `SELECT
+      COUNT(*) AS total_events,
+      SUM(CASE WHEN event_category = 'mcp' THEN 1 ELSE 0 END) AS mcp_count,
+      SUM(CASE WHEN event_category = 'tool_call' THEN 1 ELSE 0 END) AS tool_call_count,
+      SUM(CASE WHEN event_category = 'file_write' THEN 1 ELSE 0 END) AS file_write_count,
+      SUM(CASE WHEN event_category = 'shell' THEN 1 ELSE 0 END) AS shell_count,
+      SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_count,
+      MAX(created_at) AS last_event_at
+     FROM hook_events WHERE session_id = ?`
+  ).get(sid)
+
+  const categoryCounts = db.prepare(
+    `SELECT event_category, COUNT(*) AS count
+     FROM hook_events WHERE session_id = ?
+     GROUP BY event_category ORDER BY count DESC`
+  ).all(sid)
+
+  const hookNameCounts = db.prepare(
+    `SELECT hook_event_name, COUNT(*) AS count
+     FROM hook_events WHERE session_id = ?
+     GROUP BY hook_event_name ORDER BY count DESC`
+  ).all(sid)
+
+  const events = db.prepare(
+    `SELECT id, project_id, session_id, agent_type, hook_event_name, event_category, status, summary, payload_json, created_at
+     FROM hook_events WHERE session_id = ? ORDER BY created_at DESC LIMIT ?`
+  ).all(sid, limit) as Record<string, unknown>[]
+
+  const parsedEvents = events.map(event => {
+    let parsedPayload: unknown = {}
+    try {
+      parsedPayload = JSON.parse(String(event.payload_json || '{}'))
+    } catch {
+      parsedPayload = {}
+    }
+    return { ...event, payload: parsedPayload }
+  })
+
+  res.json({
+    success: true,
+    data: {
+      stats: {
+        ...(stats as Record<string, unknown>),
+        category_counts: categoryCounts,
+        hook_name_counts: hookNameCounts
+      },
+      events: parsedEvents
+    }
+  })
 })
 
 // ---- 记忆管理路由 ----
@@ -844,6 +988,22 @@ function getApiDocs() {
       { method: 'GET', path: '/api/settings', description: '获取设置' },
       { method: 'PUT', path: '/api/settings', description: '更新设置' },
       { method: 'GET', path: '/api/docs', description: 'API文档' }
+    ]},
+    { group: 'Hooks 事件', apis: [
+      {
+        method: 'POST',
+        path: '/api/hooks/events',
+        description: '上报单条 hooks 事件',
+        body: {
+          project_id: 'string',
+          session_id: 'string',
+          agent_type: 'cursor|claudecode|openclaw',
+          hook_event_name: 'string',
+          status: 'success|error',
+          payload: 'object'
+        }
+      },
+      { method: 'GET', path: '/api/hooks/sessions/:sessionId?limit=300', description: '获取 session hooks 统计与明细' }
     ]}
   ]
 }

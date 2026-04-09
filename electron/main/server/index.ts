@@ -11,6 +11,7 @@ import projectsRouter from './routes/projects'
 import sessionsRouter from './routes/sessions'
 import tasksRouter from './routes/tasks'
 import memoriesRouter from './routes/memories'
+import hooksRouter from './routes/hooks'
 import * as db from '../db'
 import { generateSkillsTemplate } from './skillsTemplate'
 
@@ -51,6 +52,7 @@ export function startServer(
     app.use('/api/sessions', sessionsRouter)
     app.use('/api/tasks', wrapTaskRouterWithSocket(onNotification))
     app.use('/api/memories', memoriesRouter)
+    app.use('/api/hooks', hooksRouter)
 
     // 健康检查
     app.get('/api/health', (_req, res) => {
@@ -173,12 +175,16 @@ function wrapTaskRouterWithSocket(onNotification?: (data: unknown) => void) {
   router.use('/', tasksRouter)
 
   // 在任务更新后，通过后置中间件广播 Socket.IO 事件
-  const originalPost = router.stack.find(
-    (layer: { route?: { path: string; methods: Record<string, boolean> } }) =>
-      layer.route?.path === '/update' && layer.route?.methods?.post
-  )
+  const originalPost = router.stack.find((layer) => {
+    const route = (layer as unknown as {
+      route?: { path?: string; methods?: Record<string, boolean>; stack?: { handle: (...args: unknown[]) => void }[] }
+    }).route
+    return route?.path === '/update' && !!route?.methods?.post
+  }) as {
+    route?: { stack?: { handle: (req: express.Request, res: express.Response, next: express.NextFunction) => void }[] }
+  } | undefined
 
-  if (originalPost?.route) {
+  if (originalPost?.route?.stack?.[0]) {
     const originalHandler = originalPost.route.stack[0].handle
     originalPost.route.stack[0].handle = (req: express.Request, res: express.Response, next: express.NextFunction) => {
       // 捕获原始 json 方法以在发送响应后广播
@@ -262,6 +268,29 @@ function getApiDocs() {
         { method: 'PUT', path: '/api/settings', description: '更新用户设置' },
         { method: 'GET', path: '/api/docs', description: 'API 文档' },
         { method: 'GET', path: '/api/skills/generate', description: '生成 Skills 模板' }
+      ]
+    },
+    {
+      group: 'Hooks 事件',
+      apis: [
+        {
+          method: 'POST',
+          path: '/api/hooks/events',
+          description: '上报单条 hooks 触发事件',
+          body: {
+            project_id: 'string (必填)',
+            session_id: 'string (必填)',
+            agent_type: 'cursor | claudecode | openclaw',
+            hook_event_name: 'string (必填)',
+            status: 'success | error',
+            payload: 'object'
+          }
+        },
+        {
+          method: 'GET',
+          path: '/api/hooks/sessions/:sessionId?limit=300',
+          description: '获取 session hooks 统计与明细'
+        }
       ]
     }
   ]

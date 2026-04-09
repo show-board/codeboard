@@ -94,6 +94,23 @@ CREATE TABLE IF NOT EXISTS notifications (
   FOREIGN KEY (project_id) REFERENCES projects(project_id)
 );
 
+-- Hook 事件表：记录各 Agent hooks 的详细触发轨迹（用于会话统计与审计）
+CREATE TABLE IF NOT EXISTS hook_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  agent_type TEXT DEFAULT 'unknown',         -- cursor / claudecode / openclaw
+  hook_event_name TEXT NOT NULL,             -- 原始 hook 事件名
+  event_category TEXT DEFAULT 'other',       -- mcp / tool_call / file_write / ...
+  status TEXT DEFAULT 'success'              -- success / error
+    CHECK(status IN ('success', 'error')),
+  summary TEXT DEFAULT '',                   -- 简短摘要（便于看板快速展示）
+  payload_json TEXT DEFAULT '{}',            -- 原始 payload JSON
+  created_at DATETIME DEFAULT (datetime('now', 'localtime')),
+  FOREIGN KEY (project_id) REFERENCES projects(project_id),
+  FOREIGN KEY (session_id) REFERENCES sessions(session_id)
+);
+
 -- 创建索引加速查询
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
@@ -103,6 +120,10 @@ CREATE INDEX IF NOT EXISTS idx_memory_docs_project ON memory_documents(project_i
 CREATE INDEX IF NOT EXISTS idx_memory_docs_category ON memory_documents(category_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_project ON notifications(project_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(is_read);
+CREATE INDEX IF NOT EXISTS idx_hook_events_project ON hook_events(project_id);
+CREATE INDEX IF NOT EXISTS idx_hook_events_session ON hook_events(session_id);
+CREATE INDEX IF NOT EXISTS idx_hook_events_category ON hook_events(event_category);
+CREATE INDEX IF NOT EXISTS idx_hook_events_created ON hook_events(created_at);
 `
 
 /** 默认用户设置 */

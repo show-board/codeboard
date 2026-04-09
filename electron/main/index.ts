@@ -269,14 +269,18 @@ function createTray() {
  * 避免服务器未启动时前端 IPC 调用全部崩溃导致白屏
  */
 /**
- * 定位 skills/codeboard 目录
- * - 开发：仓库根下 skills/codeboard（app.getAppPath() 指向应用根）
- * - 打包：electron-builder extraResources 置于 Contents/Resources/skills/codeboard
+ * 定位 hooks-first 主 Skill 目录（优先 codeboard-cursor）
+ * - 开发：仓库根下 skills/codeboard-cursor（不存在则回退 skills/codeboard）
+ * - 打包：优先 Contents/Resources/skills/codeboard-cursor
  */
 function resolveSkillsCodeboardDir(): string {
   if (app.isPackaged) {
+    const cursorDir = path.join(process.resourcesPath, 'skills', 'codeboard-cursor')
+    if (fs.existsSync(cursorDir)) return cursorDir
     return path.join(process.resourcesPath, 'skills', 'codeboard')
   }
+  const cursorDir = path.join(app.getAppPath(), 'skills', 'codeboard-cursor')
+  if (fs.existsSync(cursorDir)) return cursorDir
   return path.join(app.getAppPath(), 'skills', 'codeboard')
 }
 
@@ -426,7 +430,7 @@ function registerIpcHandlers() {
     })
     if (result.canceled || !result.filePaths.length) return { success: false }
 
-    const targetDir = path.join(result.filePaths[0], 'codeboard')
+    const targetDir = path.join(result.filePaths[0], 'codeboard-cursor')
     // 创建目录结构
     if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true })
     const refsDir = path.join(targetDir, 'references')

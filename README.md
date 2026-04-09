@@ -167,6 +167,10 @@ CodeBoard uses Skill files to guide AI Agents in automatically connecting to the
 | Claude Code  | [docs/AGENT-SETUP-CLAUDECODE.md](docs/AGENT-SETUP-CLAUDECODE.md) |
 | OpenClaw     | [docs/AGENT-SETUP-OPENCLEW.md](docs/AGENT-SETUP-OPENCLEW.md)     |
 
+> Skill strategy:
+> - hooks-first skills: `skills/codeboard-cursor`, `skills/codeboard-claudecode`, `skills/codeboard-openclaw`
+> - no-hooks fallback: `skills/codeboard`
+
 
 ---
 
@@ -191,13 +195,17 @@ codeboard/
 │   └── styles/            # Global CSS
 ├── cli/                   # CodeBoard CLI tool
 ├── skills/                # Agent Skills
-│   ├── codeboard/         # Main Skill for Kanban integration (SKILL.md + references/)
-│   └── install-codeboard-skills/  # Cursor installation guide (linked to ~/.cursor/skills)
+│   ├── codeboard/         # No-hooks fallback skill (manual flow)
+│   ├── codeboard-cursor/  # Cursor hooks-first skill
+│   ├── codeboard-claudecode/  # Claude Code hooks-first skill
+│   ├── codeboard-openclaw/  # OpenClaw hooks-first skill
+│   └── install-codeboard-skills/  # Multi-agent installer skill
 ├── docs/                  # Documentation
 │   ├── API.md             # API documentation
 │   ├── ARCHITECTURE.md    # Architecture design
 │   ├── INSTALL.md         # Installation guide
-│   └── AGENT-SETUP-*.md   # Agent setup guides
+│   ├── AGENT-SETUP-*.md   # Agent setup guides
+│   └── HOOKS-EVENT-MAPPING.md  # Hooks mapping and metrics scope
 └── test/                  # Test scripts
 ```
 
@@ -211,6 +219,8 @@ codeboard/
 | [docs/INSTALL.md](docs/INSTALL.md)                       | Application installation and setup             |
 | [docs/API.md](docs/API.md)                               | REST API documentation                         |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)             | System architecture design                     |
+| [docs/HOOKS-EVENT-MAPPING.md](docs/HOOKS-EVENT-MAPPING.md) | Multi-agent hooks event mapping and metrics    |
+| [docs/HOOKS-TECHNICAL-GUIDE.md](docs/HOOKS-TECHNICAL-GUIDE.md) | End-to-end hooks technical guide and examples |
 | [skills/codeboard/SKILL.md](skills/codeboard/SKILL.md)   | Main Skill for Agent Kanban integration        |
 | [docs/AGENT-SETUP-CURSOR.md](docs/AGENT-SETUP-CURSOR.md) | Cursor Rules + Skills installation (must-read) |
 

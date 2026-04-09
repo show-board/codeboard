@@ -2,18 +2,19 @@
 // 主看板区域
 // 横向滚动的项目列容器，支持触控板/鼠标横向拖拽滚动
 // 项目列总宽度超过展示区时可左右滑动
-// 支持单项目放大模式（左卡片 + 右记忆面板）
+// 支持单项目放大模式（左卡片 + 右 hooks 统计面板）
 // ============================================================
 
-import { useMemo, useRef, useState, useCallback } from 'react'
+import { useMemo, useRef, useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useProjectStore } from '../../stores/projectStore'
 import { useUIStore } from '../../stores/uiStore'
 import ProjectColumn from './ProjectColumn'
-import ExpandedMemoryPanel from './ExpandedMemoryPanel'
+import ExpandedHooksPanel from './ExpandedHooksPanel'
 
 export default function Board() {
   const projects = useProjectStore(s => s.projects)
+  const sessionsByProject = useProjectStore(s => s.sessions)
   const sortType = useUIStore(s => s.sortType)
   const sortOrder = useUIStore(s => s.sortOrder)
   const expandedProject = useUIStore(s => s.expandedProject)
@@ -21,6 +22,7 @@ export default function Board() {
   const [isDragging, setIsDragging] = useState(false)
   const [startX, setStartX] = useState(0)
   const [scrollLeft, setScrollLeft] = useState(0)
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
 
   // 只显示 visible 状态的项目，支持正序/倒序
   const visibleProjects = useMemo(() => {
@@ -44,6 +46,37 @@ export default function Board() {
     [expandedProject, visibleProjects]
   )
 
+  // 全屏模式下自动选中一个 Session（优先 running，其次最新更新）
+  useEffect(() => {
+    if (!expandedProjectData) {
+      setSelectedSessionId(null)
+      return
+    }
+    const projectSessions = (sessionsByProject[expandedProjectData.project_id] || []) as {
+      session_id: string
+      status: string
+      updated_at: string
+      created_at: string
+    }[]
+
+    if (projectSessions.length === 0) {
+      setSelectedSessionId(null)
+      return
+    }
+
+    // 当前选中仍存在则保持，避免频繁切换
+    const stillExists = selectedSessionId
+      ? projectSessions.some(session => session.session_id === selectedSessionId)
+      : false
+    if (stillExists) return
+
+    const sorted = [...projectSessions].sort((a, b) =>
+      new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
+    )
+    const running = sorted.find(session => session.status === 'running')
+    setSelectedSessionId((running || sorted[0]).session_id)
+  }, [expandedProjectData, sessionsByProject, selectedSessionId])
+
   // 鼠标拖拽横向滚动（仅在直接点击 Board 背景时触发，不干扰子列纵向滚动）
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (!scrollRef.current) return
@@ -66,7 +99,7 @@ export default function Board() {
     setIsDragging(false)
   }, [])
 
-  // ---- 放大模式：标题全宽，下方左半卡片右半记忆 ----
+  // ---- 放大模式：标题全宽，下方左半卡片右半 hooks 统计 ----
   if (expandedProjectData) {
     return (
       <motion.div
@@ -86,7 +119,7 @@ export default function Board() {
           <ProjectColumn project={expandedProjectData} expanded headerOnly />
         </motion.div>
 
-        {/* 下方区域：左半卡片列 + 右半记忆面板 */}
+        {/* 下方区域：左半卡片列 + 右半 hooks 统计面板 */}
         <div className="flex-1 flex overflow-hidden">
           {/* 左半：Session 卡片列（50%） */}
           <motion.div
@@ -95,17 +128,27 @@ export default function Board() {
             animate={{ x: 0, opacity: 1 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
           >
-            <ProjectColumn project={expandedProjectData} expanded bodyOnly />
+            <ProjectColumn
+              project={expandedProjectData}
+              expanded
+              bodyOnly
+              selectedSessionId={selectedSessionId}
+              onSelectSession={setSelectedSessionId}
+            />
           </motion.div>
 
-          {/* 右半：记忆展示面板（50%） */}
+          {/* 右半：Session hooks 展示面板（50%） */}
           <motion.div
             className="w-1/2 h-full border-l border-gray-200/50 dark:border-gray-700/50"
             initial={{ x: 40, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             transition={{ duration: 0.4, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
           >
-            <ExpandedMemoryPanel projectId={expandedProjectData.project_id} projectName={expandedProjectData.name} />
+            <ExpandedHooksPanel
+              projectId={expandedProjectData.project_id}
+              projectName={expandedProjectData.name}
+              sessionId={selectedSessionId}
+            />
           </motion.div>
         </div>
       </motion.div>

@@ -33,9 +33,23 @@ interface SessionCardProps {
   isLast: boolean
   /** 是否自动折叠（有新 running Session 时，历史完成卡片折叠） */
   collapsed?: boolean
+  /** 选择模式：点击卡片只用于选中（全屏右侧联动） */
+  selectMode?: boolean
+  /** 当前卡片是否被选中 */
+  selected?: boolean
+  /** 选中回调 */
+  onSelect?: (sessionId: string) => void
 }
 
-export default function SessionCard({ session, color, isLast, collapsed = false }: SessionCardProps) {
+export default function SessionCard({
+  session,
+  color,
+  isLast,
+  collapsed = false,
+  selectMode = false,
+  selected = false,
+  onSelect
+}: SessionCardProps) {
   const setShowTaskDetail = useUIStore(s => s.setShowTaskDetail)
   const trashSession = useProjectStore(s => s.trashSession)
   const cardHeightMode = useSettingsStore(s => s.displayConfig.cardHeightMode)
@@ -95,6 +109,15 @@ export default function SessionCard({ session, color, isLast, collapsed = false 
     setManualExpand(prev => prev === null ? !collapsed : !prev)
   }
 
+  /** 点击卡片：普通模式打开详情，选择模式仅切换当前会话 */
+  const handleCardClick = useCallback(() => {
+    if (selectMode) {
+      onSelect?.(session.session_id)
+      return
+    }
+    setShowTaskDetail(session.session_id)
+  }, [selectMode, onSelect, session.session_id, setShowTaskDetail])
+
   /** 右键菜单浮层 — 使用 Portal 渲染到 body，避免被父元素 overflow/transform 裁剪 */
   const contextMenuPortal = contextMenu && createPortal(
     <div
@@ -131,12 +154,17 @@ export default function SessionCard({ session, color, isLast, collapsed = false 
       <>
         {contextMenuPortal}
         <motion.div
-        className="bg-white/50 dark:bg-neutral-700/50 rounded-lg overflow-hidden cursor-pointer hover:bg-white/70 dark:hover:bg-neutral-700/70 transition-colors"
+        className={`rounded-lg overflow-hidden cursor-pointer transition-colors ${
+          selected
+            ? 'bg-blue-50/80 dark:bg-blue-900/20 ring-1 ring-blue-400/60'
+            : 'bg-white/50 dark:bg-neutral-700/50 hover:bg-white/70 dark:hover:bg-neutral-700/70'
+        }`}
         style={{ borderLeft: `3px solid ${color}` }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         layout
         onContextMenu={handleContextMenu}
+        onClick={handleCardClick}
       >
         <div className="px-3 py-2 flex items-center gap-2">
           {/* 展开按钮 */}
@@ -167,14 +195,18 @@ export default function SessionCard({ session, color, isLast, collapsed = false 
     <div>
       {contextMenuPortal}
       <motion.div
-        className="bg-white/70 dark:bg-neutral-700/70 rounded-xl overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+        className={`rounded-xl overflow-hidden cursor-pointer transition-shadow ${
+          selected
+            ? 'bg-blue-50/80 dark:bg-blue-900/20 ring-1 ring-blue-400/60 shadow-md'
+            : 'bg-white/70 dark:bg-neutral-700/70 hover:shadow-md'
+        }`}
         style={{ borderLeft: `3px solid ${color}` }}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         whileHover={{ scale: 1.01, y: -1 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         layout
-        onClick={() => setShowTaskDetail(session.session_id)}
+        onClick={handleCardClick}
         onContextMenu={handleContextMenu}
       >
         <div className="p-3">

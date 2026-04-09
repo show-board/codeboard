@@ -103,7 +103,7 @@ export default function SkillsGenerator() {
               <div className="px-8 py-3 bg-purple-50/50 dark:bg-purple-900/10 border-b border-gray-200/50 dark:border-gray-700/50 shrink-0">
                 <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
                   将此 Skills 目录保存到 <code className="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-purple-600 dark:text-purple-400">~/.cursor/skills/</code> 目录下，
-                  Cursor Agent 将自动加载这些 Skills 与 CodeBoard 看板对接。点击「保存目录」会自动创建 <code className="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-purple-600 dark:text-purple-400">codeboard/</code> 子目录。
+                  Cursor Agent 将自动加载这些 Skills 与 CodeBoard 看板对接。点击「保存目录」会自动创建 <code className="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-purple-600 dark:text-purple-400">codeboard-cursor/</code> 子目录。
                 </p>
               </div>
 
@@ -126,7 +126,7 @@ export default function SkillsGenerator() {
                       {/* 目录标题 */}
                       <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300">
                         <FolderOpen className="w-3.5 h-3.5 text-purple-500" />
-                        <span>codeboard/</span>
+                        <span>codeboard-cursor/</span>
                       </div>
 
                       {/* 主文件 SKILL.md */}
@@ -205,7 +205,7 @@ export default function SkillsGenerator() {
                       {/* 文件路径标签 */}
                       <div className="flex items-center gap-2 mb-3">
                         <span className="text-xs font-mono text-purple-500 bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded-md">
-                          codeboard/{selectedFile.path}
+                          codeboard-cursor/{selectedFile.path}
                         </span>
                         <span className="text-[10px] text-gray-400">
                           {selectedFile.content.split('\n').length} 行

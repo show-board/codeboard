@@ -1,129 +1,109 @@
-# Claude Code 安装 CodeBoard Skill 指南
+# Claude Code 安装 CodeBoard（Hooks 优先）
 
-> 在 Claude Code（Anthropic CLI Agent）中对接 CodeBoard：**先上报 session_start，再读记忆与规划**；API 地址须与正在运行的 CodeBoard 左侧面板一致。
+> 新方案：Claude Code 通过 hooks 自动上报，会话更稳定。  
+> 保留 `skills/codeboard` 作为无 hooks 回退。
 
 ## 前置条件
 
-- CodeBoard 桌面应用**保持运行**（参考 [INSTALL.md](INSTALL.md)）
-- 已安装 Claude Code CLI（`claude`）
-- 记录 API 基址，默认 `http://127.0.0.1:2585`（若修改端口请全文替换下文 URL）
+- CodeBoard 正在运行（默认 `http://127.0.0.1:2585`）
+- 已安装 `claude` CLI
+- 建议保留项目级 `CLAUDE.md`（用于补充规则，不替代 hooks）
 
 ---
 
-## 方式一：通过 CLAUDE.md 项目配置（推荐）
+## 1）启用 Claude 专属 skill
 
-在项目根目录创建 `CLAUDE.md`（以下为终端一键写入示例，外层用 `~~~` 避免与内层 Markdown 代码块冲突）：
+在 Cursor/本地文档体系中使用：
 
-~~~bash
-cat > CLAUDE.md << 'CLAUDE_EOF'
-# CodeBoard 看板对接
+- `skills/codeboard-claudecode/SKILL.md`（hooks-first）
+- `skills/codeboard/SKILL.md`（fallback）
 
-每次执行任务时遵循下列顺序（不可打乱）。
+---
 
-## 看板地址
-
-http://127.0.0.1:2585
-
-## 执行流程
-
-1. 读取 `.dashboard/project.yaml` 获取 `project_id`；若不存在则创建、注册项目后再继续
-2. **立即** `POST /api/tasks/update`，`type` 为 `session_start`，`task_list` 可先为 `[]`（须在详细规划之前，看板才会出现 Session 卡片）
-3. 获取记忆分类并读取必要记忆（必读 vibe-config）
-4. 规划完成后，**再次** `POST session_start`（**相同** `session_id`）并携带完整 `task_list`，或在与 Session 相关的合法 `type` 请求中带 `task_list` 更新列表（勿使用无效 `type`）
-5. 每个任务：`task_start` → 执行 → `task_complete`
-6. 全部结束后：`session_complete`，且 **`summary` 必填**
-7. 更新 `.dashboard/memories/` 下 9 类记忆文件（`session-history.md` 每次必更）
-8. `POST /api/memories/<project_id>/sync`，请求体 `files` 为 **JSON 数组**；或在项目根执行 `codeboard memory sync <project_id>`
-
-## ID 格式
-
-- project_id: `proj_<时间戳>`（来自 `.dashboard/project.yaml`）
-- session_id: `sess_<时间戳>`（整段对话固定）
-- task_id: `task_<时间戳>`（每任务不同）
-
-## 核心 API 示例
+## 2）安装 hooks 配置
 
 ```bash
-curl -X POST http://127.0.0.1:2585/api/projects/register \\
-  -H "Content-Type: application/json" \\
-  -d '{"project_id":"<id>","name":"<名称>","description":"<描述>"}'
+mkdir -p ~/.claude/hooks
+REPO="/绝对路径/到/codeboard仓库"
 
-curl -X POST http://127.0.0.1:2585/api/tasks/update \\
-  -H "Content-Type: application/json" \\
-  -d '{"project_id":"<id>","session_id":"<sid>","task_id":"<tid>","type":"session_start","goal":"<目标>","task_list":[]}'
+# 合并模板到你的 ~/.claude/settings.json（不要覆盖已有其他设置）
+cp "$REPO/docs/hooks_templates/claudecode/settings.json" /tmp/codeboard-claude-settings.json
 
-curl -X POST http://127.0.0.1:2585/api/memories/<project_id>/sync \\
-  -H "Content-Type: application/json" \\
-  -d '{"files":[{"category_id":1,"title":"t","file_name":"f.md","content":"..."}]}'
+# hook 脚本
+cp "$REPO/docs/hooks_templates/claudecode/hooks/codeboard_claude_event.sh" ~/.claude/hooks/
+chmod +x ~/.claude/hooks/codeboard_claude_event.sh
 ```
 
-详细分阶段说明可参考 CodeBoard 仓库：`skills/codeboard/SKILL.md` 与 `skills/codeboard/references/`。
-CLAUDE_EOF
-~~~
+> `settings.json` 里需要包含模板中的 hooks 节点（可手动 merge）。
 
-若 CodeBoard 非本机默认端口，请将文中 `http://127.0.0.1:2585` 全部替换为实际基址。
+### 一键安装（推荐）
+
+```bash
+cd /绝对路径/到/codeboard仓库
+./scripts/install-hooks-claudecode.sh
+```
+
+或用总控脚本自动检测环境：
+
+```bash
+./scripts/install-hooks-all.sh
+```
 
 ---
 
-## 方式二：全局配置（所有项目生效）
+## 3）首次初始化项目（仅第一次手动）
 
 ```bash
-mkdir -p ~/.claude
-cat >> ~/.claude/CLAUDE.md << 'EOF'
-
-# CodeBoard 看板对接
-
-每次执行任务时：先 `session_start`，再读记忆与规划；结束须 `session_complete` 并同步记忆。
-看板默认地址: http://127.0.0.1:2585
-完整流程与 curl 示例见各项目 `CLAUDE.md` 或 CodeBoard 仓库 `skills/codeboard/`。
+mkdir -p .dashboard/memories
+cat > .dashboard/project.yaml << 'EOF'
+project_name: "你的项目名"
+project_description: "你的项目描述"
+project_id: "proj_<时间戳>"
+created_at: "2026-01-01T00:00:00+08:00"
 EOF
+
+curl -s -X POST http://127.0.0.1:2585/api/projects/register \
+  -H "Content-Type: application/json" \
+  -d '{"project_id":"proj_<时间戳>","name":"你的项目名","description":"你的项目描述"}'
 ```
 
----
-
-## 方式三：通过 .claude/settings.json 配置权限
-
-```bash
-mkdir -p .claude
-
-cat > .claude/settings.json << 'EOF'
-{
-  "permissions": {
-    "allow": [
-      "curl http://127.0.0.1:2585/*",
-      "codeboard *"
-    ]
-  }
-}
-EOF
-```
-
-若 API 基址变更，请同步修改 `allow` 中的 URL 前缀。
+之后由 hooks 自动发送 `session_start` 与 hooks 事件。
 
 ---
 
-## 验证安装
+## 4）Claude hooks 覆盖事件
 
-1. 在项目目录执行 `claude`
-2. 输入：`请检查 CodeBoard 看板连接状态`
-3. 应执行 `curl http://127.0.0.1:2585/api/health`（或你的基址）并返回成功
+- `PreToolUse`
+- `PostToolUse`
+- `Notification`
+- `UserPromptSubmit`
+- `Stop`
+- `SubagentStop`
+- `PreCompact`
+- `SessionStart`
+- `SessionEnd`
+
+事件会被上报到：
+
+- `POST /api/hooks/events`
+- 在 `SessionStart` 时额外自动发送 `POST /api/tasks/update` 的 `session_start`
 
 ---
 
-## 常见问题
+## 5）回退策略
 
-### Q: Claude Code 没有读取 CLAUDE.md？
+若 hooks 不可用或异常：
 
-确认文件在项目根目录且命名为大写 `CLAUDE.md`。
+- 切回 `skills/codeboard/SKILL.md`
+- 按手动 `curl` 流程继续（不影响当前项目）
 
-### Q: 每次 curl 都要确认？
+详细技术说明见：`docs/HOOKS-TECHNICAL-GUIDE.md`
 
-在 `.claude/settings.json` 的 `allow` 中加入你的 CodeBoard API 前缀。
+---
 
-### Q: sync 报错？
+## 验证
 
-`files` 必须是数组，见 [API.md](API.md)。
+1. 进入项目执行 `claude`
+2. 发起一轮对话
+3. 看板出现新 Session 卡片，并在全屏右侧看到 hooks 事件统计
 
-### Q: 多项目复用？
-
-使用全局 `~/.claude/CLAUDE.md`，或在每个项目放置 `CLAUDE.md`。

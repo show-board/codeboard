@@ -167,6 +167,10 @@ CodeBoard 通过 Skill 文件指导 AI Agent 自动对接看板，支持多种 A
 | Claude Code  | [docs/AGENT-SETUP-CLAUDECODE.md](docs/AGENT-SETUP-CLAUDECODE.md) |
 | OpenClaw     | [docs/AGENT-SETUP-OPENCLEW.md](docs/AGENT-SETUP-OPENCLEW.md)     |
 
+> 说明：仓库同时提供两类 Skill。  
+> - hooks-first：`skills/codeboard-cursor` / `skills/codeboard-claudecode` / `skills/codeboard-openclaw`  
+> - 无 hooks 回退：`skills/codeboard`
+
 
 ---
 
@@ -191,13 +195,17 @@ codeboard/
 │   └── styles/            # 全局 CSS
 ├── cli/                   # CodeBoard CLI 工具
 ├── skills/                # Agent Skills
-│   ├── codeboard/         # 看板对接主 Skill（SKILL.md + references/）
-│   └── install-codeboard-skills/  # Cursor 安装指引（链到 ~/.cursor/skills）
+│   ├── codeboard/         # 无 hooks 回退 Skill（手动流程）
+│   ├── codeboard-cursor/  # Cursor hooks-first Skill
+│   ├── codeboard-claudecode/  # Claude Code hooks-first Skill
+│   ├── codeboard-openclaw/  # OpenClaw hooks-first Skill
+│   └── install-codeboard-skills/  # 多 Agent 安装引导 Skill
 ├── docs/                  # 文档
 │   ├── API.md             # API 接口文档
 │   ├── ARCHITECTURE.md    # 架构设计
 │   ├── INSTALL.md         # 应用安装指南
-│   └── AGENT-SETUP-*.md   # 各 Agent 安装指南
+│   ├── AGENT-SETUP-*.md   # 各 Agent 安装指南
+│   └── HOOKS-EVENT-MAPPING.md  # Hooks 事件映射与统计口径
 └── test/                  # 测试脚本
 ```
 
@@ -211,6 +219,8 @@ codeboard/
 | [docs/INSTALL.md](docs/INSTALL.md)                       | 应用安装与运行指南                    |
 | [docs/API.md](docs/API.md)                               | REST API 接口文档                |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)             | 系统架构设计                       |
+| [docs/HOOKS-EVENT-MAPPING.md](docs/HOOKS-EVENT-MAPPING.md) | 多 Agent hooks 事件映射与统计口径 |
+| [docs/HOOKS-TECHNICAL-GUIDE.md](docs/HOOKS-TECHNICAL-GUIDE.md) | hooks 全流程技术文档与安装示例 |
 | [skills/codeboard/SKILL.md](skills/codeboard/SKILL.md)   | Agent 看板对接主 Skill            |
 | [docs/AGENT-SETUP-CURSOR.md](docs/AGENT-SETUP-CURSOR.md) | Cursor Rules + Skills 安装（必读） |
 

@@ -1,107 +1,93 @@
-# OpenClaw Agent 安装 CodeBoard Skill 指南
+# OpenClaw 安装 CodeBoard（Hooks 优先）
 
-> 在 OpenClaw 或其它兼容「文件型系统提示词」的 Agent 中接入 CodeBoard：**会话开始立即 `session_start`**，API 与正在运行的 CodeBoard 一致。
+> 新方案：OpenClaw 通过内部 hooks 自动上报到 CodeBoard。  
+> 同时保留 `skills/codeboard` 作为无 hooks 回退。
 
 ## 前置条件
 
-- CodeBoard 桌面应用**保持运行**（参考 [INSTALL.md](INSTALL.md)）
-- 已部署 OpenClaw（或同类）Agent
-- API 基址默认 `http://127.0.0.1:2585`（按左侧面板实际地址修改）
+- CodeBoard 正在运行（默认 `http://127.0.0.1:2585`）
+- OpenClaw Gateway 可用
+- 建议设置环境变量：`CODEBOARD_API`
 
 ---
 
-## 方式一：复制 Skill 目录内容
+## 1）使用 OpenClaw 专属 skill
 
-CodeBoard 仓库中主 Skill 位于 **`skills/codeboard/`**（含 `SKILL.md` 与 `references/`），请勿再使用已废弃路径 `skills/SKILL.md`。
+- `skills/codeboard-openclaw/SKILL.md`（hooks-first）
+- `skills/codeboard/SKILL.md`（fallback）
+
+---
+
+## 2）安装 OpenClaw hooks
 
 ```bash
-# 示例：复制到 Agent 可读目录（保留目录结构以便引用相对路径）
-mkdir -p /path/to/agent/skills/codeboard
-cp -R /path/to/codeboard/skills/codeboard/* /path/to/agent/skills/codeboard/
+mkdir -p ~/.openclaw/hooks
+REPO="/绝对路径/到/codeboard仓库"
+
+cp -R "$REPO/docs/hooks_templates/openclaw/codeboard-dashboard" ~/.openclaw/hooks/
+openclaw hooks enable codeboard-dashboard
+openclaw hooks check
 ```
 
-在 Agent 配置中引用主文件，例如：
+> 模板目录内含 `HOOK.md + handler.ts`，会自动把事件上报到 CodeBoard。
 
-```yaml
-system_prompt_files:
-  - skills/codeboard/SKILL.md
-environment:
-  CODEBOARD_API: "http://127.0.0.1:2585"
+### 一键安装（推荐）
+
+```bash
+cd /绝对路径/到/codeboard仓库
+./scripts/install-hooks-openclaw.sh
+```
+
+或用总控脚本自动检测环境：
+
+```bash
+./scripts/install-hooks-all.sh
 ```
 
 ---
 
-## 方式二：通过 AGENTS.md 配置
-
-在项目根目录创建 `AGENTS.md`：
+## 3）首次初始化项目（仅第一次手动）
 
 ```bash
-cat > AGENTS.md << 'EOF'
-# Agent 指令
-
-## CodeBoard 看板对接
-
-### 看板地址
-http://127.0.0.1:2585
-
-### 执行流程（顺序强制）
-1. 检查 `.dashboard/project.yaml`，缺失则创建并注册项目
-2. **立即** 发送 `session_start`（`task_list` 可先 `[]`），再读取记忆（必读 vibe-config）
-3. 规划完成后，用**相同** `session_id` 再次 `session_start` 并携带完整 `task_list`（勿使用无效 `type`）
-4. 每任务：`task_start` → 执行 → `task_complete`
-5. `session_complete`（`summary` 必填）
-6. 更新 `.dashboard/memories/` 并 `POST .../sync`（`files` 为数组）
-
-### ID 格式
-- project_id: `proj_<时间戳>`
-- session_id: `sess_<时间戳>`
-- task_id: `task_<时间戳>`
-
-详细 API 与 curl：CodeBoard 仓库 `skills/codeboard/SKILL.md` 与 `references/`
+mkdir -p .dashboard/memories
+cat > .dashboard/project.yaml << 'EOF'
+project_name: "你的项目名"
+project_description: "你的项目描述"
+project_id: "proj_<时间戳>"
+created_at: "2026-01-01T00:00:00+08:00"
 EOF
+
+curl -s -X POST http://127.0.0.1:2585/api/projects/register \
+  -H "Content-Type: application/json" \
+  -d '{"project_id":"proj_<时间戳>","name":"你的项目名","description":"你的项目描述"}'
 ```
 
----
-
-## 方式三：环境变量 + 启动脚本
-
-```bash
-#!/bin/bash
-export CODEBOARD_API="http://127.0.0.1:2585"
-
-if curl -s "$CODEBOARD_API/api/health" | grep -q '"success":true'; then
-  echo "[CodeBoard] 看板连接正常"
-else
-  echo "[CodeBoard] 警告: 看板未运行，请启动 CodeBoard 桌面应用"
-fi
-
-if [ -f ".dashboard/project.yaml" ]; then
-  echo "[CodeBoard] 项目配置已存在"
-else
-  echo "[CodeBoard] 提示: 需创建 .dashboard/project.yaml"
-fi
-```
+首次接入完成后，`command:new/reset` 会自动触发 `session_start`。
 
 ---
 
-## 验证安装
+## 4）建议监听事件
 
-1. 启动 Agent 并进入项目目录
-2. 要求 Agent：`检查 CodeBoard 看板连接状态`
-3. 预期：请求 `<API>/api/health` 返回 `success: true`
+- 命令：`command:new` `command:reset` `command:stop` `command`
+- 会话：`session:compact:before` `session:compact:after` `session:patch`
+- 生命周期：`agent:bootstrap` `gateway:startup`
+- 消息：`message:received` `message:transcribed` `message:preprocessed` `message:sent`
+
+这些事件会统一进入 `POST /api/hooks/events`，用于会话统计面板展示。
 
 ---
 
-## 常见问题
+## 5）回退策略
 
-### Q: Agent 在容器内无法访问 localhost？
+当 hooks 不可用时，继续按 `skills/codeboard/SKILL.md` 的手动流程执行即可。
 
-将 CodeBoard 监听改为 `0.0.0.0`（左侧面板），或做端口转发；并把 Agent 侧 URL 改为可达地址。
+详细技术说明见：`docs/HOOKS-TECHNICAL-GUIDE.md`
 
-### Q: 多 Agent 并发？
+---
 
-使用不同 `session_id` 即可。
+## 验证
 
-### Q: 自定义 API 地址？
+1. 进入项目并启动 OpenClaw
+2. 执行 `/new` 或 `/reset`
+3. 看板出现新 Session，且在全屏右侧能查看 hooks 明细
 
-统一修改环境变量、`AGENTS.md` 与 CodeBoard 监听配置，保持一处来源避免混用。

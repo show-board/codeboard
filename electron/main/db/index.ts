@@ -11,6 +11,17 @@ import { CREATE_TABLES_SQL, DEFAULT_SETTINGS, DEFAULT_MEMORY_CATEGORIES } from '
 
 let db: Database.Database
 
+type HookEventStatus = 'success' | 'error'
+
+interface HookEventInput {
+  project_id: string
+  session_id: string
+  agent_type?: string
+  hook_event_name: string
+  status?: HookEventStatus
+  payload?: Record<string, unknown>
+}
+
 /** 获取数据库文件路径（开发/生产环境自适应） */
 function getDbPath(): string {
   const userDataPath = app?.getPath?.('userData') || path.resolve(process.cwd(), 'data')
@@ -113,6 +124,7 @@ export function updateProject(projectId: string, fields: Record<string, string>)
 
 export function deleteProject(projectId: string) {
   const db = getDb()
+  db.prepare('DELETE FROM hook_events WHERE project_id = ?').run(projectId)
   db.prepare('DELETE FROM task_updates WHERE project_id = ?').run(projectId)
   db.prepare('DELETE FROM sessions WHERE project_id = ?').run(projectId)
   db.prepare('DELETE FROM memory_documents WHERE project_id = ?').run(projectId)
@@ -180,6 +192,7 @@ export function restoreSession(sessionId: string) {
 /** 永久删除 Session 及其关联的任务更新 */
 export function permanentDeleteSession(sessionId: string) {
   const db = getDb()
+  db.prepare('DELETE FROM hook_events WHERE session_id = ?').run(sessionId)
   db.prepare('DELETE FROM task_updates WHERE session_id = ?').run(sessionId)
   db.prepare('DELETE FROM sessions WHERE session_id = ?').run(sessionId)
   return { success: true }
@@ -190,6 +203,7 @@ export function clearTrashedSessions() {
   const db = getDb()
   const trashed = db.prepare('SELECT session_id FROM sessions WHERE is_trashed = 1').all() as { session_id: string }[]
   for (const s of trashed) {
+    db.prepare('DELETE FROM hook_events WHERE session_id = ?').run(s.session_id)
     db.prepare('DELETE FROM task_updates WHERE session_id = ?').run(s.session_id)
   }
   db.prepare('DELETE FROM sessions WHERE is_trashed = 1').run()
@@ -234,6 +248,130 @@ export function addTaskUpdate(data: {
 
 export function getTaskUpdatesBySession(sessionId: string) {
   return getDb().prepare('SELECT * FROM task_updates WHERE session_id = ? ORDER BY created_at ASC').all(sessionId)
+}
+
+// ---- Hook 事件 ----
+
+/** 根据 hook 名称和 payload 推断统计分类 */
+function classifyHookEvent(hookEventName: string, payload: Record<string, unknown>): string {
+  const name = hookEventName.toLowerCase()
+  const toolName = String(payload.tool_name || payload.toolName || '').toLowerCase()
+
+  if (name.includes('mcp') || toolName.startsWith('mcp__')) return 'mcp'
+  if (name.includes('subagent')) return 'subagent'
+  if (name.includes('compact')) return 'compact'
+  if (name.includes('session') || name === 'stop') return 'session'
+  if (name.includes('shell') || toolName === 'bash' || toolName === 'shell') return 'shell'
+
+  if (
+    name.includes('fileedit') ||
+    name.includes('tabfileedit') ||
+    ['write', 'edit', 'multiedit'].includes(toolName) ||
+    Array.isArray(payload.edits)
+  ) {
+    return 'file_write'
+  }
+
+  if (
+    name.includes('readfile') ||
+    name.includes('tabfileread') ||
+    ['read', 'glob', 'grep'].includes(toolName)
+  ) {
+    return 'file_read'
+  }
+
+  if (name.includes('tooluse') || toolName) return 'tool_call'
+  if (name.includes('message') || name.includes('notification')) return 'message'
+  return 'other'
+}
+
+/** 生成 hooks 事件的一行摘要，便于看板快速展示 */
+function summarizeHookEvent(hookEventName: string, payload: Record<string, unknown>): string {
+  const command = String(payload.command || '')
+  if (command) return `${hookEventName}: ${command.slice(0, 120)}`
+
+  const toolName = String(payload.tool_name || payload.toolName || '')
+  if (toolName) return `${hookEventName}: ${toolName}`
+
+  const filePath = String(payload.file_path || payload.filePath || '')
+  if (filePath) return `${hookEventName}: ${filePath}`
+
+  const message = String(payload.message || '')
+  if (message) return `${hookEventName}: ${message.slice(0, 120)}`
+
+  return hookEventName
+}
+
+export function addHookEvent(data: HookEventInput) {
+  const db = getDb()
+  const payload = data.payload || {}
+  const category = classifyHookEvent(data.hook_event_name, payload)
+  const summary = summarizeHookEvent(data.hook_event_name, payload)
+  const result = db.prepare(
+    `INSERT INTO hook_events
+      (project_id, session_id, agent_type, hook_event_name, event_category, status, summary, payload_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    data.project_id,
+    data.session_id,
+    data.agent_type || 'unknown',
+    data.hook_event_name,
+    category,
+    data.status || 'success',
+    summary,
+    JSON.stringify(payload)
+  )
+
+  // hooks 事件视为会话活跃信号，顺带刷新更新时间
+  db.prepare("UPDATE sessions SET updated_at = datetime('now', 'localtime') WHERE session_id = ?").run(data.session_id)
+  db.prepare("UPDATE projects SET updated_at = datetime('now', 'localtime') WHERE project_id = ?").run(data.project_id)
+
+  return {
+    success: true,
+    id: result.lastInsertRowid,
+    event_category: category,
+    summary
+  }
+}
+
+export function getHookEventsBySession(sessionId: string, limit = 300) {
+  return getDb().prepare(
+    `SELECT id, project_id, session_id, agent_type, hook_event_name, event_category, status, summary, payload_json, created_at
+     FROM hook_events WHERE session_id = ? ORDER BY created_at DESC LIMIT ?`
+  ).all(sessionId, limit)
+}
+
+export function getHookStatsBySession(sessionId: string) {
+  const db = getDb()
+  const summary = db.prepare(
+    `SELECT
+      COUNT(*) AS total_events,
+      SUM(CASE WHEN event_category = 'mcp' THEN 1 ELSE 0 END) AS mcp_count,
+      SUM(CASE WHEN event_category = 'tool_call' THEN 1 ELSE 0 END) AS tool_call_count,
+      SUM(CASE WHEN event_category = 'file_write' THEN 1 ELSE 0 END) AS file_write_count,
+      SUM(CASE WHEN event_category = 'shell' THEN 1 ELSE 0 END) AS shell_count,
+      SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_count,
+      MAX(created_at) AS last_event_at
+     FROM hook_events WHERE session_id = ?`
+  ).get(sessionId) as Record<string, unknown>
+
+  const categoryCounts = db.prepare(
+    `SELECT event_category, COUNT(*) AS count
+     FROM hook_events WHERE session_id = ?
+     GROUP BY event_category ORDER BY count DESC`
+  ).all(sessionId)
+
+  const hookNameCounts = db.prepare(
+    `SELECT hook_event_name, COUNT(*) AS count
+     FROM hook_events WHERE session_id = ?
+     GROUP BY hook_event_name ORDER BY count DESC`
+  ).all(sessionId)
+
+  return {
+    ...summary,
+    category_counts: categoryCounts,
+    hook_name_counts: hookNameCounts
+  }
 }
 
 // ---- 记忆管理 ----

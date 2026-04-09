@@ -4,18 +4,18 @@
 // ============================================================
 
 /**
- * 根据 baseUrl 生成单文件 Markdown Skill（可单独放入 ~/.cursor/skills/codeboard/SKILL.md）
- * 说明：完整分章引用见 CodeBoard 仓库 skills/codeboard/references/
+ * 根据 baseUrl 生成单文件 Markdown Skill（可单独放入 ~/.cursor/skills/codeboard-cursor/SKILL.md）
+ * 说明：该模板为 hooks-first 版本；无 hooks 回退请使用 skills/codeboard
  */
 export function generateSkillsTemplate(baseUrl: string): string {
   return `---
-name: codeboard
-description: Syncs agent sessions with CodeBoard at ${baseUrl} (session_start first, tasks, memories). Use when .dashboard/project.yaml exists or when integrating CodeBoard dashboard.
+name: codeboard-cursor
+description: Cursor hooks-first skill for CodeBoard at ${baseUrl}. Keeps legacy codeboard skill as no-hooks fallback.
 ---
 
-# CodeBoard 项目看板对接 Skill
+# CodeBoard Cursor Hooks Skill
 
-> 指导 AI Agent 在每次对话中与 CodeBoard 看板对接。**以下步骤强制执行，不可跳过或延后。**
+> hooks-first 方案：Cursor 通过全局 hooks 自动上报。无 hooks 时回退到 \`skills/codeboard\`。
 
 ## 前置要求
 
@@ -54,8 +54,9 @@ description: Syncs agent sessions with CodeBoard at ${baseUrl} (session_start fi
 ## 安装到 Cursor（摘要）
 
 - Cursor 从 \`~/.cursor/skills/<目录名>/SKILL.md\` 加载 Skill；**勿**向 \`~/.cursor/skills-cursor/\` 写入（系统保留）。
-- **推荐**：克隆本仓库后执行 \`ln -sfn "<仓库绝对路径>/skills/codeboard" ~/.cursor/skills/codeboard\`（含 \`references/\`）。
-- **单文件**：可将本模板保存为 \`~/.cursor/skills/codeboard/SKILL.md\`（无 references 时以本文件自足为准）。
+- **推荐**：克隆本仓库后执行 \`ln -sfn "<仓库绝对路径>/skills/codeboard-cursor" ~/.cursor/skills/codeboard-cursor\`。
+- **单文件**：可将本模板保存为 \`~/.cursor/skills/codeboard-cursor/SKILL.md\`。
+- 同时保留无 hooks 回退：\`ln -sfn "<仓库绝对路径>/skills/codeboard" ~/.cursor/skills/codeboard\`。
 - 配合项目内 \`.cursor/rules/\` 规则 \`alwaysApply: true\` 更稳，参见仓库 \`docs/AGENT-SETUP-CURSOR.md\`。
 
 ---
