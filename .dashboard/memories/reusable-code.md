@@ -74,8 +74,9 @@ function startServerProcess(host: string, port: number): Promise<void>
 ### ExpandedHooksPanel (`src/components/Board/ExpandedHooksPanel.tsx`)
 全屏模式右侧 hooks 统计面板组件：
 - 读取 `/api/hooks/sessions/:sessionId`
-- 展示 `MCP / ToolCall / 文件写入 / 全部事件` 统计卡
-- 支持点击统计卡筛选事件明细
+- 展示“概览卡 + 全分类胶囊 + 高频 Hook 标签 + 明细列表”
+- 支持按 category/hook_name 双维度筛选
+- 明细项支持结构化标签与 payload JSON 折叠查看
 
 ### addHookEvent / getHookStatsBySession (`electron/main/db/index.ts`)
 - `addHookEvent(data)`：落库单条 hooks 事件，自动分类与摘要

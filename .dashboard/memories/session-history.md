@@ -2,6 +2,16 @@
 
 ## 2026-04-10
 
+### sess_1775755042 — hooks 全分类面板扩展与 mac 风格重构
+- **目标**: 全屏右侧不再只显示 4 类统计，改为覆盖所有可传输 hooks 分类，并保持优雅布局不挤压明细区。
+- **完成任务**:
+  - [x] 右侧面板改为动态分类渲染，展示 `mcp/tool_call/file_write/file_read/shell/session/subagent/compact/message/prompt/other`
+  - [x] 新增 prompt 相关统计：`beforeSubmitPrompt` / `UserPromptSubmit` 归入 `prompt` 分类
+  - [x] 面板重构为“概览卡 + 分类胶囊 + 高频 Hook 标签 + 明细列表”四段式布局
+  - [x] 明细增强：增加结构化标签（duration/reason/failure/context 等）与 payload JSON 折叠查看
+  - [x] 同步 `standalone` 与 `db` 两套分类/统计逻辑，避免不同运行模式统计不一致
+- **关键变更文件**: `src/components/Board/ExpandedHooksPanel.tsx`, `electron/main/db/index.ts`, `electron/main/server/standalone.ts`, `docs/HOOKS-EVENT-MAPPING.md`
+
 ### sess_1775753348 — 取消 ToolUse 到 task 映射，恢复 task 语义上报
 - **目标**: 将 `task` 与 `toolcall` 完全解耦，确保任务状态仅由 Agent 规划语义驱动。
 - **完成任务**:

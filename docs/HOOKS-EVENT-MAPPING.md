@@ -30,7 +30,9 @@
 | `session` | `sessionStart/sessionEnd/SessionStart/SessionEnd` | 会话生命周期 |
 | `compact` | `preCompact/PreCompact/session:compact:*` | 上下文压缩行为 |
 | `message` | `message:*`、`Notification` | 消息流事件 |
+| `prompt` | `beforeSubmitPrompt`、`UserPromptSubmit` | Prompt 提交行为 |
 | `subagent` | `subagent*`、`SubagentStop` | 子代理行为 |
+| `other` | 其余未命中规则事件 | 兜底分类 |
 
 ## Cursor 全量 hooks
 

@@ -61,6 +61,8 @@ function classifyHookEvent(hookEventName: string, payload: Record<string, unknow
   const name = hookEventName.toLowerCase()
   const toolName = String(payload.tool_name || payload.toolName || '').toLowerCase()
 
+  // prompt 提交单独归类，方便看板统计与筛选
+  if (name.includes('submitprompt')) return 'prompt'
   if (name.includes('mcp') || toolName.startsWith('mcp__')) return 'mcp'
   if (name.includes('subagent')) return 'subagent'
   if (name.includes('compact')) return 'compact'
@@ -376,7 +378,14 @@ app.get('/api/hooks/sessions/:sid', (req, res) => {
       SUM(CASE WHEN event_category = 'mcp' THEN 1 ELSE 0 END) AS mcp_count,
       SUM(CASE WHEN event_category = 'tool_call' THEN 1 ELSE 0 END) AS tool_call_count,
       SUM(CASE WHEN event_category = 'file_write' THEN 1 ELSE 0 END) AS file_write_count,
+      SUM(CASE WHEN event_category = 'file_read' THEN 1 ELSE 0 END) AS file_read_count,
       SUM(CASE WHEN event_category = 'shell' THEN 1 ELSE 0 END) AS shell_count,
+      SUM(CASE WHEN event_category = 'session' THEN 1 ELSE 0 END) AS session_count,
+      SUM(CASE WHEN event_category = 'subagent' THEN 1 ELSE 0 END) AS subagent_count,
+      SUM(CASE WHEN event_category = 'compact' THEN 1 ELSE 0 END) AS compact_count,
+      SUM(CASE WHEN event_category = 'message' THEN 1 ELSE 0 END) AS message_count,
+      SUM(CASE WHEN event_category = 'prompt' THEN 1 ELSE 0 END) AS prompt_count,
+      SUM(CASE WHEN event_category = 'other' THEN 1 ELSE 0 END) AS other_count,
       SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_count,
       MAX(created_at) AS last_event_at
      FROM hook_events WHERE session_id = ?`
