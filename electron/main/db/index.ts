@@ -163,8 +163,17 @@ export function updateSession(sessionId: string, fields: Record<string, unknown>
 }
 
 export function getSessionsByProject(projectId: string) {
+  // LEFT JOIN 统计每个 session 关联的 hook_events 数量，前端可在卡片上展示徽章
   return getDb().prepare(
-    'SELECT * FROM sessions WHERE project_id = ? AND (is_trashed IS NULL OR is_trashed = 0) ORDER BY created_at DESC'
+    `SELECT s.*, COALESCE(h.hook_events_count, 0) as hook_events_count
+     FROM sessions s
+     LEFT JOIN (
+       SELECT session_id, COUNT(*) as hook_events_count
+       FROM hook_events
+       GROUP BY session_id
+     ) h ON s.session_id = h.session_id
+     WHERE s.project_id = ? AND (s.is_trashed IS NULL OR s.is_trashed = 0)
+     ORDER BY s.created_at DESC`
   ).all(projectId)
 }
 
@@ -304,11 +313,14 @@ function summarizeHookEvent(hookEventName: string, payload: Record<string, unkno
   return hookEventName
 }
 
-export function addHookEvent(data: HookEventInput) {
+export function addHookEvent(data: HookEventInput & { description?: string }) {
   const db = getDb()
   const payload = data.payload || {}
   const category = classifyHookEvent(data.hook_event_name, payload)
-  const summary = summarizeHookEvent(data.hook_event_name, payload)
+  // 优先使用 hook 脚本传入的 description，其次使用 payload 中的 description，最后回退到自动摘要
+  const summary = data.description
+    || (typeof payload.description === 'string' ? payload.description : '')
+    || summarizeHookEvent(data.hook_event_name, payload)
   const result = db.prepare(
     `INSERT INTO hook_events
       (project_id, session_id, agent_type, hook_event_name, event_category, status, summary, payload_json)
@@ -334,6 +346,18 @@ export function addHookEvent(data: HookEventInput) {
     event_category: category,
     summary
   }
+}
+
+/** 返回某个项目下所有 session 的 hooks 事件计数，前端可用于在卡片上显示徽章 */
+export function getHookSessionCountsByProject(projectId: string) {
+  return getDb().prepare(
+    `SELECT h.session_id, COUNT(*) as count, MAX(h.created_at) as last_event_at
+     FROM hook_events h
+     JOIN sessions s ON h.session_id = s.session_id
+     WHERE s.project_id = ?
+     GROUP BY h.session_id
+     ORDER BY last_event_at DESC`
+  ).all(projectId) as { session_id: string; count: number; last_event_at: string }[]
 }
 
 export function getHookEventsBySession(sessionId: string, limit = 300) {

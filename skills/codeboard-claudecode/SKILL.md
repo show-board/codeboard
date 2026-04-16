@@ -1,63 +1,135 @@
 ---
 name: codeboard-claudecode
-description: Claude Code hooks-first integration for CodeBoard using ~/.claude/settings.json hooks. Keeps legacy codeboard skill for no-hooks fallback.
+description: "Claude Code hooks-first 接入方案。通过 settings.json hooks 自动上报事件到 CodeBoard 看板。"
 ---
 
-# CodeBoard Claude Code Hooks Skill
+# CodeBoard — Claude Code Hooks 接入方案
 
-> 这是 Claude Code 的 **hooks 优先** 接入方案。  
-> 无 hooks 时继续使用 `skills/codeboard/SKILL.md`。
+> Claude Code 的 hooks 配置在 `~/.claude/settings.json` 中。
+> 无 hooks 场景继续使用 `skills/codeboard/SKILL.md`（保留原全手动流程）。
 
-## 使用场景
+## 核心原理
 
-- 你使用 `claude` CLI 作为主 Agent
-- 你希望通过 hooks 自动上报会话与工具事件
+通过 Claude Code 官方 hooks 机制，将 Agent 事件自动上报到 CodeBoard 看板：
 
-## 首次初始化（仅第一次）
+- `SessionStart` → 自动触发 `session_start`（看板卡片出现）
+- `SessionEnd` → 自动触发 `session_complete`（看板标记完成）
+- 所有工具调用（PreToolUse/PostToolUse）→ 全量记录到 `/api/hooks/events`
 
-1. 创建 `.dashboard/project.yaml`，确保存在 `project_id`。
-2. 调用 `POST /api/projects/register` 完成项目注册。
-3. 手动发送一次 `session_start`，确保看板出现首张卡片。
-4. 后续由 hooks 自动上报。
+## 安装步骤（全局，只需做一次）
 
-## 安装要求（全局）
+### 1. 安装 hook 脚本
 
-1. 将 `docs/hooks_templates/claudecode/settings.json` 合并到：
-   - `~/.claude/settings.json`
-2. 将 `docs/hooks_templates/claudecode/hooks/codeboard_claude_event.sh` 复制到：
-   - `~/.claude/hooks/codeboard_claude_event.sh`
-3. 添加执行权限：
-   - `chmod +x ~/.claude/hooks/codeboard_claude_event.sh`
-4. 可选环境变量：
-   - `CODEBOARD_API`（默认 `http://127.0.0.1:2585`）
+```bash
+mkdir -p ~/.claude/hooks
+cp docs/hooks_templates/claudecode/hooks/codeboard_cc_event.sh ~/.claude/hooks/
+chmod +x ~/.claude/hooks/codeboard_cc_event.sh
+```
 
-## 上报策略（Claude Code）
+### 2. 配置 hooks
 
-- `SessionStart`：自动尝试发送 `session_start`
-- 全量 hooks 同步到 `POST /api/hooks/events`（保持工具调用独立轨迹）
-- **不再**通过 ToolUse hooks 推导 `task_start/task_complete/session_complete`
+将以下内容合并到 `~/.claude/settings.json`（注意：如果已有 hooks 配置，需手动合并数组）：
 
-## 仍需 Agent 手动执行（不可省略）
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "~/.claude/hooks/codeboard_cc_event.sh" }] }
+    ],
+    "PostToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "command", "command": "~/.claude/hooks/codeboard_cc_event.sh" }] }
+    ],
+    "Notification": [
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/codeboard_cc_event.sh" }] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/codeboard_cc_event.sh" }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/codeboard_cc_event.sh" }] }
+    ],
+    "SubagentStop": [
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/codeboard_cc_event.sh" }] }
+    ],
+    "PreCompact": [
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/codeboard_cc_event.sh" }] }
+    ],
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/codeboard_cc_event.sh" }] }
+    ],
+    "SessionEnd": [
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/codeboard_cc_event.sh" }] }
+    ]
+  }
+}
+```
 
-1. 规划完成后，手动用确认后的任务分解更新 `task_list`
-2. 每个规划任务开始时，手动发 `task_start`
-3. 每个规划任务完成时，手动发 `task_complete`
-4. 最终人工复核后补发 `session_complete(summary)`
-5. 记忆系统同步（更新 9 类文档 + `/api/memories/<project_id>/sync`）
+或直接复制模板：
 
-## 覆盖的官方 hooks（全量）
+```bash
+cp docs/hooks_templates/claudecode/settings.json ~/.claude/settings.json
+```
 
-- `PreToolUse`
-- `PostToolUse`
-- `Notification`
-- `UserPromptSubmit`
-- `Stop`
-- `SubagentStop`
-- `PreCompact`
-- `SessionStart`
-- `SessionEnd`
+### 3. 验证安装
+
+```bash
+claude --debug
+# 查看 hook 执行日志确认已加载
+```
+
+## 首次初始化（每个新项目做一次）
+
+> hooks 无法替代"项目首次注册"。未完成初始化的项目，hooks 会静默跳过所有上报。
+
+1. **创建项目配置**:
+
+```bash
+mkdir -p .dashboard/memories
+```
+
+创建 `.dashboard/project.yaml`:
+
+```yaml
+project_name: "你的项目名称"
+project_description: "项目简要描述"
+project_id: "proj_<当前时间戳>"
+created_at: "<ISO 时间>"
+```
+
+2. **注册项目**:
+
+```bash
+curl -s -X POST http://127.0.0.1:2585/api/projects/register \
+  -H "Content-Type: application/json" \
+  -d '{"project_id":"<project_id>","name":"项目名称","description":"项目描述"}'
+```
+
+3. **验证**: `curl -s -X POST http://127.0.0.1:2585/api/projects/<project_id>/test` → 返回 `{"available": true}`
+
+## Agent 仍需手动执行的操作
+
+| 步骤 | 时机 | API |
+|------|------|-----|
+| 补发 task_list | 规划完成后 | `POST /api/tasks/update` type=session_start，带 task_list |
+| task_start | 每个规划任务开始时 | `POST /api/tasks/update` type=task_start |
+| task_complete | 每个规划任务完成时 | `POST /api/tasks/update` type=task_complete |
+| session_complete | 所有任务完成后 | `POST /api/tasks/update` type=session_complete，带 summary |
+| 记忆收录 | session 结束前 | 更新 `.dashboard/memories/` + `POST /api/memories/<pid>/sync` |
+
+## Hooks 覆盖的事件
+
+**工具操作**: PreToolUse, PostToolUse
+**通知与提交**: Notification, UserPromptSubmit
+**停止与压缩**: Stop, SubagentStop, PreCompact
+**会话生命周期**: SessionStart, SessionEnd
+
+## 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `CODEBOARD_API` | `http://127.0.0.1:2585` | CodeBoard API 地址 |
+| `CLAUDE_PROJECT_DIR` | 当前工作目录 | Claude Code 自动设置的项目目录 |
 
 ## 无 hooks 回退
 
-无法启用 hooks 时，使用 `skills/codeboard/SKILL.md` 的纯 `curl` 流程，不影响稳定性。
-
+若无法使用 hooks，继续启用 `skills/codeboard/SKILL.md`，按原全手动流程运行。

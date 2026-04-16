@@ -31,6 +31,19 @@ db.exec(CREATE_TABLES_SQL)
 
 // 迁移：为 sessions 表添加 is_trashed 列（软删除支持）
 try { db.exec('ALTER TABLE sessions ADD COLUMN is_trashed INTEGER DEFAULT 0') } catch { /* 已存在则忽略 */ }
+// 迁移：添加 cursor_conversation_id / cursor_generation_id 列，建立 session ↔ Cursor 对话轮次映射
+try { db.exec('ALTER TABLE sessions ADD COLUMN cursor_conversation_id TEXT') } catch { /* 已存在则忽略 */ }
+try { db.exec('ALTER TABLE sessions ADD COLUMN cursor_generation_id TEXT') } catch { /* 已存在则忽略 */ }
+// 迁移：hook_events 表添加 generation_id 列，便于按轮次高效查询
+try { db.exec('ALTER TABLE hook_events ADD COLUMN generation_id TEXT') } catch { /* 已存在则忽略 */ }
+// 回填：从已有 payload 中提取 generation_id
+try {
+  const needBackfill = db.prepare("SELECT COUNT(*) as c FROM hook_events WHERE generation_id IS NULL AND json_extract(payload_json, '$.generation_id') IS NOT NULL").get() as { c: number }
+  if (needBackfill.c > 0) {
+    db.exec("UPDATE hook_events SET generation_id = json_extract(payload_json, '$.generation_id') WHERE generation_id IS NULL AND json_extract(payload_json, '$.generation_id') IS NOT NULL")
+    console.log(`[DB] 回填 generation_id: ${needBackfill.c} 条记录`)
+  }
+} catch (e) { console.error('[DB] 回填 generation_id 失败:', e) }
 
 const insertSetting = db.prepare('INSERT OR IGNORE INTO user_settings (key, value) VALUES (?, ?)')
 for (const s of DEFAULT_SETTINGS) insertSetting.run(s.key, s.value)
@@ -215,7 +228,24 @@ app.post('/api/sessions', (req, res) => {
 })
 
 app.get('/api/sessions/:pid', (req, res) => {
-  const sessions = db.prepare('SELECT * FROM sessions WHERE project_id = ? AND (is_trashed IS NULL OR is_trashed = 0) ORDER BY created_at DESC').all(req.params.pid) as Record<string, unknown>[]
+  // 按映射关系计算 hook_events_count
+  // 有 generation_id → 精确匹配轮次；只有 conversation_id → 整个对话；否则按 session_id
+  const sessions = db.prepare(
+    `SELECT s.*,
+       COALESCE(
+         CASE
+           WHEN s.cursor_conversation_id IS NOT NULL AND s.cursor_conversation_id != '' AND s.cursor_generation_id IS NOT NULL AND s.cursor_generation_id != ''
+             THEN (SELECT COUNT(*) FROM hook_events WHERE session_id = s.cursor_conversation_id AND generation_id = s.cursor_generation_id)
+           WHEN s.cursor_conversation_id IS NOT NULL AND s.cursor_conversation_id != ''
+             THEN (SELECT COUNT(*) FROM hook_events WHERE session_id = s.cursor_conversation_id)
+           ELSE (SELECT COUNT(*) FROM hook_events WHERE session_id = s.session_id)
+         END,
+         0
+       ) as hook_events_count
+     FROM sessions s
+     WHERE s.project_id = ? AND (s.is_trashed IS NULL OR s.is_trashed = 0)
+     ORDER BY s.created_at DESC`
+  ).all(req.params.pid) as Record<string, unknown>[]
   const parsed = sessions.map(s => ({ ...s, task_list: JSON.parse((s.task_list_json as string) || '[]') }))
   res.json({ success: true, data: parsed })
 })
@@ -277,7 +307,7 @@ app.delete('/api/sessions/trashed/clear', (_req, res) => {
 // ---- 任务更新路由（核心） ----
 
 app.post('/api/tasks/update', (req, res) => {
-  const { project_id, session_id, task_id, type, task_name, task_plan, task_summary, content, task_list, goal, summary } = req.body
+  const { project_id, session_id, task_id, type, task_name, task_plan, task_summary, content, task_list, goal, summary, conversation_id, generation_id } = req.body
   if (!project_id || !session_id || !task_id || !type) return res.status(400).json({ success: false, error: '缺少必要字段' })
   const validTypes = ['session_start', 'task_start', 'task_progress', 'task_complete', 'session_complete']
   if (!validTypes.includes(type)) return res.status(400).json({ success: false, error: '无效 type' })
@@ -285,15 +315,17 @@ app.post('/api/tasks/update', (req, res) => {
   if (!p) return res.status(404).json({ success: false, error: '项目不存在' })
   if (p.status !== 'visible') db.prepare("UPDATE projects SET status = 'visible', updated_at = datetime('now', 'localtime') WHERE project_id = ?").run(project_id)
 
-  // session_start: 自动创建 Session
+  // session_start: 自动创建 Session，支持 conversation_id 映射
   if (type === 'session_start') {
     const exists = db.prepare('SELECT session_id FROM sessions WHERE session_id = ?').get(session_id)
     if (!exists) {
-      db.prepare('INSERT INTO sessions (session_id, project_id, goal, task_list_json, status) VALUES (?, ?, ?, ?, ?)').run(session_id, project_id, goal || '', JSON.stringify(task_list || []), 'running')
+      db.prepare('INSERT INTO sessions (session_id, project_id, goal, task_list_json, status, cursor_conversation_id, cursor_generation_id) VALUES (?, ?, ?, ?, ?, ?, ?)').run(session_id, project_id, goal || '', JSON.stringify(task_list || []), 'running', conversation_id || null, generation_id || null)
     } else {
       const u: string[] = ["status = 'running'"]; const v: unknown[] = []
       if (goal) { u.push('goal = ?'); v.push(goal) }
       if (task_list) { u.push('task_list_json = ?'); v.push(JSON.stringify(task_list)) }
+      if (conversation_id) { u.push('cursor_conversation_id = ?'); v.push(conversation_id) }
+      if (generation_id) { u.push('cursor_generation_id = ?'); v.push(generation_id) }
       u.push("updated_at = datetime('now', 'localtime')")
       v.push(session_id)
       db.prepare(`UPDATE sessions SET ${u.join(', ')} WHERE session_id = ?`).run(...v)
@@ -327,7 +359,7 @@ app.get('/api/tasks/:sid', (req, res) => {
 // ---- Hooks 事件路由 ----
 
 app.post('/api/hooks/events', (req, res) => {
-  const { project_id, session_id, agent_type, hook_event_name, status, payload } = req.body || {}
+  const { project_id, session_id, agent_type, hook_event_name, status, description, payload } = req.body || {}
   if (!project_id || !session_id || !hook_event_name) {
     return res.status(400).json({ success: false, error: '缺少必要字段: project_id, session_id, hook_event_name' })
   }
@@ -339,18 +371,30 @@ app.post('/api/hooks/events', (req, res) => {
 
   const existingSession = db.prepare('SELECT session_id FROM sessions WHERE session_id = ?').get(session_id)
   if (!existingSession) {
-    db.prepare('INSERT INTO sessions (session_id, project_id, goal, task_list_json, status) VALUES (?, ?, ?, ?, ?)')
-      .run(session_id, project_id, 'hooks 自动创建 session', '[]', 'running')
+    // 检查是否已有手动 session 映射了此 conversation_id，避免创建冗余的自动 session
+    const mappedSession = db.prepare(
+      'SELECT session_id FROM sessions WHERE cursor_conversation_id = ? AND (is_trashed IS NULL OR is_trashed = 0)'
+    ).get(session_id)
+    if (!mappedSession) {
+      db.prepare('INSERT INTO sessions (session_id, project_id, goal, task_list_json, status) VALUES (?, ?, ?, ?, ?)')
+        .run(session_id, project_id, 'hooks 自动创建 session', '[]', 'running')
+    }
   }
 
   const safePayload = (typeof payload === 'object' && payload !== null) ? payload as Record<string, unknown> : {}
   const category = classifyHookEvent(String(hook_event_name), safePayload)
-  const summary = summarizeHookEvent(String(hook_event_name), safePayload)
+  // 优先使用 hook 脚本传入的 description，其次 payload.description，最后回退到自动摘要
+  const summary = (typeof description === 'string' && description)
+    || (typeof safePayload.description === 'string' ? safePayload.description : '')
+    || summarizeHookEvent(String(hook_event_name), safePayload)
+
+  // 从 payload 中提取 generation_id，存入独立列便于按轮次查询
+  const generationId = String(safePayload.generation_id || safePayload.generationId || '') || null
 
   const result = db.prepare(
     `INSERT INTO hook_events
-      (project_id, session_id, agent_type, hook_event_name, event_category, status, summary, payload_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      (project_id, session_id, agent_type, hook_event_name, event_category, status, summary, payload_json, generation_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     project_id,
     session_id,
@@ -359,7 +403,8 @@ app.post('/api/hooks/events', (req, res) => {
     category,
     status === 'error' ? 'error' : 'success',
     summary,
-    JSON.stringify(safePayload)
+    JSON.stringify(safePayload),
+    generationId
   )
 
   db.prepare("UPDATE sessions SET updated_at = datetime('now', 'localtime') WHERE session_id = ?").run(session_id)
@@ -368,9 +413,32 @@ app.post('/api/hooks/events', (req, res) => {
   res.json({ success: true, id: result.lastInsertRowid, event_category: category, summary })
 })
 
-app.get('/api/hooks/sessions/:sid', (req, res) => {
-  const limit = Math.min(Math.max(Number(req.query.limit || 300), 1), 1000)
-  const sid = req.params.sid
+// 项目级 hooks 事件计数：前端卡片徽章和空 session 切换建议
+app.get('/api/hooks/project/:projectId/session-counts', (req, res) => {
+  const counts = db.prepare(
+    `SELECT h.session_id, COUNT(*) as count, MAX(h.created_at) as last_event_at
+     FROM hook_events h
+     JOIN sessions s ON h.session_id = s.session_id
+     WHERE s.project_id = ?
+     GROUP BY h.session_id
+     ORDER BY last_event_at DESC`
+  ).all(req.params.projectId)
+  res.json({ success: true, data: counts })
+})
+
+// 按时间范围查询 hooks（将 hooks 正确分配到对应的手动 session 时间段）
+app.get('/api/hooks/project/:projectId/by-timerange', (req, res) => {
+  const { projectId } = req.params
+  const start = String(req.query.start || '')
+  const end = String(req.query.end || '')
+  const limit = Math.min(Math.max(Number(req.query.limit || 500), 1), 2000)
+
+  if (!start) {
+    return res.status(400).json({ success: false, error: '缺少 start 参数' })
+  }
+
+  // 对 running session 使用当前时间作为 end
+  const effectiveEnd = end || new Date().toISOString().replace('T', ' ').slice(0, 19)
 
   const stats = db.prepare(
     `SELECT
@@ -388,25 +456,103 @@ app.get('/api/hooks/sessions/:sid', (req, res) => {
       SUM(CASE WHEN event_category = 'other' THEN 1 ELSE 0 END) AS other_count,
       SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_count,
       MAX(created_at) AS last_event_at
-     FROM hook_events WHERE session_id = ?`
-  ).get(sid)
+     FROM hook_events
+     WHERE project_id = ? AND created_at >= ? AND created_at <= ?`
+  ).get(projectId, start, effectiveEnd)
 
   const categoryCounts = db.prepare(
     `SELECT event_category, COUNT(*) AS count
-     FROM hook_events WHERE session_id = ?
+     FROM hook_events WHERE project_id = ? AND created_at >= ? AND created_at <= ?
      GROUP BY event_category ORDER BY count DESC`
-  ).all(sid)
+  ).all(projectId, start, effectiveEnd)
 
   const hookNameCounts = db.prepare(
     `SELECT hook_event_name, COUNT(*) AS count
-     FROM hook_events WHERE session_id = ?
+     FROM hook_events WHERE project_id = ? AND created_at >= ? AND created_at <= ?
      GROUP BY hook_event_name ORDER BY count DESC`
-  ).all(sid)
+  ).all(projectId, start, effectiveEnd)
 
   const events = db.prepare(
     `SELECT id, project_id, session_id, agent_type, hook_event_name, event_category, status, summary, payload_json, created_at
-     FROM hook_events WHERE session_id = ? ORDER BY created_at DESC LIMIT ?`
-  ).all(sid, limit) as Record<string, unknown>[]
+     FROM hook_events WHERE project_id = ? AND created_at >= ? AND created_at <= ?
+     ORDER BY created_at DESC LIMIT ?`
+  ).all(projectId, start, effectiveEnd, limit) as Record<string, unknown>[]
+
+  const parsedEvents = events.map(event => {
+    let parsedPayload: unknown = {}
+    try { parsedPayload = JSON.parse(String(event.payload_json || '{}')) } catch { parsedPayload = {} }
+    return { ...event, payload: parsedPayload }
+  })
+
+  res.json({
+    success: true,
+    data: {
+      stats: { ...(stats as Record<string, unknown>), category_counts: categoryCounts, hook_name_counts: hookNameCounts },
+      events: parsedEvents
+    }
+  })
+})
+
+app.get('/api/hooks/sessions/:sid', (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit || 300), 1), 1000)
+  const sid = req.params.sid
+
+  // 通过映射关系查找：session → (cursor_conversation_id, cursor_generation_id)
+  // 如果有 generation_id，按 (conversation_id, generation_id) 精确匹配该轮次的 hooks
+  // 如果只有 conversation_id 没有 generation_id，返回整个对话的 hooks
+  const session = db.prepare('SELECT cursor_conversation_id, cursor_generation_id FROM sessions WHERE session_id = ?').get(sid) as { cursor_conversation_id: string | null; cursor_generation_id: string | null } | undefined
+  const convId = session?.cursor_conversation_id
+  const genId = session?.cursor_generation_id
+
+  // 构建 WHERE 条件：优先按 (conversation_id + generation_id) 精确匹配轮次
+  let whereClause: string
+  let whereParams: unknown[]
+  if (convId && genId) {
+    whereClause = 'session_id = ? AND generation_id = ?'
+    whereParams = [convId, genId]
+  } else if (convId) {
+    whereClause = 'session_id = ?'
+    whereParams = [convId]
+  } else {
+    whereClause = 'session_id = ?'
+    whereParams = [sid]
+  }
+
+  const stats = db.prepare(
+    `SELECT
+      COUNT(*) AS total_events,
+      SUM(CASE WHEN event_category = 'mcp' THEN 1 ELSE 0 END) AS mcp_count,
+      SUM(CASE WHEN event_category = 'tool_call' THEN 1 ELSE 0 END) AS tool_call_count,
+      SUM(CASE WHEN event_category = 'file_write' THEN 1 ELSE 0 END) AS file_write_count,
+      SUM(CASE WHEN event_category = 'file_read' THEN 1 ELSE 0 END) AS file_read_count,
+      SUM(CASE WHEN event_category = 'shell' THEN 1 ELSE 0 END) AS shell_count,
+      SUM(CASE WHEN event_category = 'session' THEN 1 ELSE 0 END) AS session_count,
+      SUM(CASE WHEN event_category = 'subagent' THEN 1 ELSE 0 END) AS subagent_count,
+      SUM(CASE WHEN event_category = 'compact' THEN 1 ELSE 0 END) AS compact_count,
+      SUM(CASE WHEN event_category = 'message' THEN 1 ELSE 0 END) AS message_count,
+      SUM(CASE WHEN event_category = 'prompt' THEN 1 ELSE 0 END) AS prompt_count,
+      SUM(CASE WHEN event_category = 'other' THEN 1 ELSE 0 END) AS other_count,
+      SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_count,
+      MAX(created_at) AS last_event_at
+     FROM hook_events WHERE ${whereClause}`
+  ).get(...whereParams)
+
+  const categoryCounts = db.prepare(
+    `SELECT event_category, COUNT(*) AS count
+     FROM hook_events WHERE ${whereClause}
+     GROUP BY event_category ORDER BY count DESC`
+  ).all(...whereParams)
+
+  const hookNameCounts = db.prepare(
+    `SELECT hook_event_name, COUNT(*) AS count
+     FROM hook_events WHERE ${whereClause}
+     GROUP BY hook_event_name ORDER BY count DESC`
+  ).all(...whereParams)
+
+  const events = db.prepare(
+    `SELECT id, project_id, session_id, agent_type, hook_event_name, event_category, status, summary, payload_json, generation_id, created_at
+     FROM hook_events WHERE ${whereClause} ORDER BY created_at DESC LIMIT ?`
+  ).all(...whereParams, limit) as Record<string, unknown>[]
 
   const parsedEvents = events.map(event => {
     let parsedPayload: unknown = {}
@@ -421,6 +567,8 @@ app.get('/api/hooks/sessions/:sid', (req, res) => {
   res.json({
     success: true,
     data: {
+      mapped_conversation_id: convId || null,
+      mapped_generation_id: genId || null,
       stats: {
         ...(stats as Record<string, unknown>),
         category_counts: categoryCounts,

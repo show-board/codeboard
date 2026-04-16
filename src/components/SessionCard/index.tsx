@@ -7,7 +7,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, ChevronRight, Trash2, Eye } from 'lucide-react'
+import { ChevronDown, ChevronRight, Trash2, Eye, Zap } from 'lucide-react'
 import StatusBadge from '../common/StatusBadge'
 import TaskList from './TaskList'
 import WaitingRibbon from './WaitingRibbon'
@@ -25,6 +25,9 @@ interface SessionData {
   prompt_text?: string
   created_at: string
   updated_at: string
+  hook_events_count?: number
+  cursor_conversation_id?: string
+  cursor_generation_id?: string
 }
 
 interface SessionCardProps {
@@ -177,7 +180,13 @@ export default function SessionCard({
           <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate flex-1 min-w-0">
             {session.summary || session.goal || '未设置目标'}
           </p>
-          {/* 点击打开详情 */}
+          {/* hooks 事件计数徽章 */}
+          {(session.hook_events_count ?? 0) > 0 && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 text-[9px] shrink-0" title={`${session.hook_events_count} 条 hooks 事件`}>
+              <Zap className="w-2.5 h-2.5" />
+              {session.hook_events_count}
+            </span>
+          )}
           <button
             onClick={(e) => { e.stopPropagation(); setShowTaskDetail(session.session_id) }}
             className="text-[10px] text-blue-500 hover:text-blue-600 shrink-0"
@@ -220,6 +229,13 @@ export default function SessionCard({
                 </button>
               )}
               <StatusBadge status={session.status} />
+              {/* hooks 事件计数徽章 */}
+              {(session.hook_events_count ?? 0) > 0 && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 text-[9px]" title={`${session.hook_events_count} 条 hooks 事件`}>
+                  <Zap className="w-2.5 h-2.5" />
+                  {session.hook_events_count}
+                </span>
+              )}
             </div>
             <span className="text-[10px] text-gray-400">{formatTime(session.updated_at || session.created_at)}</span>
           </div>
@@ -247,6 +263,23 @@ export default function SessionCard({
                 }`}>
                   {session.summary}
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* 内联 Hooks 活动指示器：直接在卡片内展示 hooks 关联状态 */}
+          {(session.hook_events_count ?? 0) > 0 && (
+            <div className="mt-2 pt-2 border-t border-purple-200/30 dark:border-purple-700/30">
+              <div className="flex items-center gap-1.5">
+                <Zap className="w-3 h-3 text-purple-500 shrink-0" />
+                <span className="text-[10px] text-purple-600 dark:text-purple-300 font-medium">
+                  {session.hook_events_count} 条 Hooks 活动
+                </span>
+                {(session.cursor_conversation_id || session.cursor_generation_id) && (
+                  <span className="text-[9px] text-purple-400 dark:text-purple-500 ml-auto truncate max-w-[160px]" title={`对话: ${session.cursor_conversation_id || '-'}\n轮次: ${session.cursor_generation_id || '-'}`}>
+                    {session.cursor_generation_id ? session.cursor_generation_id.slice(0, 8) + '...' : session.cursor_conversation_id?.slice(0, 8) + '...'}
+                  </span>
+                )}
               </div>
             </div>
           )}

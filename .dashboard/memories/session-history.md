@@ -1,5 +1,38 @@
 # Session 历史记录
 
+## 2026-04-16
+
+### sess_20260416_hook_mapping — Hooks 关联机制重构（conversation_id + generation_id 映射）
+- **目标**: 解决 Cursor hooks 的 session_id 与 codeboard 手动 session_id 不匹配问题
+- **核心方案**: 建立 `codeboard session_id ↔ (Cursor conversation_id, generation_id)` 双重映射
+- **关键理解**: Cursor 中 `conversation_id` 是整个对话窗口不变的 ID，`generation_id` 是每轮用户消息的唯一 ID。codeboard 的每个 session 对应一轮 (conversation_id, generation_id)
+- **完成任务**:
+  - [x] DB: sessions 表新增 `cursor_conversation_id` + `cursor_generation_id` 列
+  - [x] DB: hook_events 表新增 `generation_id` 列 + 自动回填
+  - [x] 后端: session_start API 接受 `conversation_id` + `generation_id` 字段并存储
+  - [x] 后端: hooks 查询按 (conversation_id, generation_id) 精确匹配轮次
+  - [x] 后端: session 列表按映射计算 `hook_events_count`（有 gen_id 精确匹配，否则整个对话）
+  - [x] 后端: hook 事件存储时提取 `generation_id` 到独立列
+  - [x] 后端: hook 事件收录时检查映射避免创建冗余自动 session
+  - [x] Hook 脚本: 写入 `generation_id` 到 `.dashboard/.current_generation` 文件
+  - [x] Hook 脚本: 保留 `conversation_id` 和 `generation_id` 到 payload
+  - [x] 前端: SessionCard 内联 hooks 活动指示器 + 映射 ID
+  - [x] 前端: ExpandedHooksPanel 头部显示轮次映射关系
+  - [x] SKILL.md / codeboard.md 规则: session_start 模板携带 conversation_id + generation_id
+- **影响文件**: `standalone.ts`, `codeboard_cursor_event.sh`(实际+模板), `ExpandedHooksPanel.tsx`, `SessionCard/index.tsx`, `Board/index.tsx`, `projectStore.ts`, `03-task-report.md`, `codeboard.md`
+
+### sess_20260416_hooks_panel_v2 — 双模式 hooks 面板重构
+- **目标**: ExpandedHooksPanel 支持两种展示方式（分类统计 + 时间线），轻量筛选，动画过渡
+- **完成任务**:
+  - [x] 时间线视图（默认）：日期分组 + 竖线节点 + 分类彩色圆标 + 事件卡片
+  - [x] 通知类 hooks（beforeReadFile/beforeTabFileRead/preToolUse/afterAgentThought）缩小化单行显示
+  - [x] 统计视图：概览三卡 + 分类百分比横条 + 卡片明细列表
+  - [x] 轻量化筛选栏：单行紧凑显示 + 可折叠展开分类/hook名称双层筛选
+  - [x] AnimatePresence + layout 动画：筛选时事件平滑缩减/展开
+  - [x] 点击事件卡片展开 payload，点击缩小化事件可展开为完整卡片
+- **关键变更文件**: ExpandedHooksPanel.tsx（完全重写）
+- **设计决策**: 不修改 standalone.ts（本次只涉及前端渲染，API 接口不变）
+
 ## 2026-04-10
 
 ### sess_1775755042 — hooks 全分类面板扩展与 mac 风格重构
@@ -158,6 +191,23 @@
   - [x] Skills 模板全面更新（强制记忆收录流程、summary 必填、记忆分类定义）
   - [x] 全部 9 类记忆文档创建并上传到看板
 - **关键变更文件**: Sidebar/index.tsx, HelpGuide.tsx, SessionCard/index.tsx, tasks.ts, SKILL.md, 04-session-complete.md, 06-conventions.md
+
+### sess_20260415_hooks_debug — 诊断并修复 hooks 事件不显示
+- **目标**: hooks 事件成功写入数据库但不在看板 session 卡片中展示
+- **根因**: 
+  1. `ExpandedHooksPanel` 只加载一次不轮询
+  2. `standalone.ts` 是实际运行的服务器（子进程），`hooks.ts` 的修改不会直接生效
+  3. hooks 自动创建的 session（含 636 条事件）被误移入垃圾篓
+  4. session 卡片没有 hooks 事件数量提示，用户不知道选哪个
+- **完成任务**:
+  - [x] ExpandedHooksPanel 添加 5 秒轮询自动刷新
+  - [x] standalone.ts 同步添加 `/api/hooks/project/:projectId/session-counts` 端点
+  - [x] standalone.ts 同步添加 `description` 字段优先级 + sessions JOIN hook_events_count
+  - [x] SessionCard 添加 hooks 事件数量紫色徽章（展开 + 折叠模式）
+  - [x] ExpandedHooksPanel 当选中 session 无 hooks 时，建议切换到有事件的 session
+  - [x] 恢复被误删的 bf6a session（含 636 条 hooks 事件）
+- **关键变更文件**: ExpandedHooksPanel.tsx, standalone.ts, SessionCard/index.tsx, Board/index.tsx, db/index.ts, hooks.ts, projectStore.ts
+- **经验教训**: 所有后端逻辑修改必须同时更新 `standalone.ts`（独立子进程服务器），仅修改 `routes/*.ts` 不会生效
 
 ## 2026-04-04（初始构建）
 

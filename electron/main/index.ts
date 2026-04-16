@@ -8,7 +8,7 @@ import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, Notification, she
 import { spawn, ChildProcess, execSync } from 'child_process'
 import path from 'path'
 import fs from 'fs'
-import { generateSkillsTemplate } from './server/skillsTemplate'
+import { generateSkillsTemplate, generateCodeboardRule, generateAgentsMd, generateClaudeMd } from './server/skillsTemplate'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -371,80 +371,150 @@ function registerIpcHandlers() {
     return { success: true, path: result.filePath }
   })
 
-  // ---- Skills 目录包：读取 skills/codeboard/ 下所有文件并返回文件树 ----
+  // ---- Skills 目录包：读取 skills/ 下所有文件并返回文件树 ----
+  // 返回结构: rules/ (规则配置) + skills/ (SKILL.md + references + scripts)
   ipcMain.handle('get-skills-bundle', async () => {
-    // 从磁盘读取完整 skills（打包后依赖 extraResources）
+    const baseUrl = `http://${currentHost}:${currentPort}`
     const skillsDir = resolveSkillsCodeboardDir()
     const files: { path: string; name: string; content: string }[] = []
 
+    // ── 文件夹1: rules/ — Agent 规则配置文件 ──
+    files.push({ path: 'rules/codeboard.md', name: 'codeboard.md', content: generateCodeboardRule(baseUrl) })
+    files.push({ path: 'rules/AGENTS.md', name: 'AGENTS.md', content: generateAgentsMd(baseUrl) })
+    files.push({ path: 'rules/CLAUDE.md', name: 'CLAUDE.md', content: generateClaudeMd(baseUrl) })
+
+    // ── 文件夹2: skills/ — Skills 主文件 + references + scripts ──
+
+    // 读取 SKILL.md
     try {
-      // 读取 SKILL.md 主文件，替换默认地址为当前运行地址
       const skillMdPath = path.join(skillsDir, 'SKILL.md')
       if (fs.existsSync(skillMdPath)) {
         let content = fs.readFileSync(skillMdPath, 'utf-8')
-        // 将默认地址替换为当前实际运行地址
-        content = content.replace(/http:\/\/127\.0\.0\.1:2585/g, `http://${currentHost}:${currentPort}`)
-        files.push({ path: 'SKILL.md', name: 'SKILL.md', content })
+        content = content.replace(/http:\/\/127\.0\.0\.1:2585/g, baseUrl)
+        files.push({ path: 'skills/codeboard/SKILL.md', name: 'SKILL.md', content })
       }
 
-      // 读取 references/ 目录下的所有 .md 文件
+      // 读取 references/ 目录
       const refsDir = path.join(skillsDir, 'references')
       if (fs.existsSync(refsDir)) {
-        const refFiles = fs.readdirSync(refsDir)
-          .filter(f => f.endsWith('.md'))
-          .sort()
+        const refFiles = fs.readdirSync(refsDir).filter(f => f.endsWith('.md')).sort()
         for (const rf of refFiles) {
           let content = fs.readFileSync(path.join(refsDir, rf), 'utf-8')
-          content = content.replace(/http:\/\/127\.0\.0\.1:2585/g, `http://${currentHost}:${currentPort}`)
-          files.push({ path: `references/${rf}`, name: rf, content })
+          content = content.replace(/http:\/\/127\.0\.0\.1:2585/g, baseUrl)
+          files.push({ path: `skills/codeboard/references/${rf}`, name: rf, content })
+        }
+      }
+
+      // 读取 scripts/ 目录
+      const scriptsDir = path.join(skillsDir, 'scripts')
+      if (fs.existsSync(scriptsDir)) {
+        const scriptFiles = fs.readdirSync(scriptsDir).filter(f => f.endsWith('.py') || f.endsWith('.sh'))
+        for (const sf of scriptFiles) {
+          const content = fs.readFileSync(path.join(scriptsDir, sf), 'utf-8')
+          files.push({ path: `skills/codeboard/scripts/${sf}`, name: sf, content })
         }
       }
     } catch (err) {
       console.warn('[IPC] 读取 skills 目录失败:', (err as Error).message)
     }
 
-    // 磁盘无完整包时：先请求子进程 API，再本地模板兜底（避免服务未就绪或旧版 standalone 无路由）
-    if (files.length === 0) {
+    // 如果磁盘上没有 SKILL.md，用模板兜底
+    const hasSkillMd = files.some(f => f.path === 'skills/codeboard/SKILL.md')
+    if (!hasSkillMd) {
       try {
         const r = await apiGet(`/api/skills/generate?host=${encodeURIComponent(currentHost)}&port=${encodeURIComponent(String(currentPort))}`) as Record<string, unknown>
         const data = r.data as { content?: string }
         if (data?.content) {
-          files.push({ path: 'SKILL.md', name: 'SKILL.md', content: data.content })
+          files.push({ path: 'skills/codeboard/SKILL.md', name: 'SKILL.md', content: data.content })
         }
       } catch { /* 忽略 */ }
     }
-    if (files.length === 0) {
-      const baseUrl = `http://${currentHost}:${currentPort}`
-      files.push({ path: 'SKILL.md', name: 'SKILL.md', content: generateSkillsTemplate(baseUrl) })
+    if (!files.some(f => f.path === 'skills/codeboard/SKILL.md')) {
+      files.push({ path: 'skills/codeboard/SKILL.md', name: 'SKILL.md', content: generateSkillsTemplate(baseUrl) })
+    }
+
+    // codeboard-cursor / claudecode / openclaw SKILL.md（hooks-first 版本）
+    const agentSkillDirs = ['codeboard-cursor', 'codeboard-claudecode', 'codeboard-openclaw']
+    for (const dirName of agentSkillDirs) {
+      const agentDir = path.join(app.isPackaged ? process.resourcesPath : app.getAppPath(), 'skills', dirName)
+      const skillPath = path.join(agentDir, 'SKILL.md')
+      if (fs.existsSync(skillPath)) {
+        let content = fs.readFileSync(skillPath, 'utf-8')
+        content = content.replace(/http:\/\/127\.0\.0\.1:2585/g, baseUrl)
+        files.push({ path: `skills/${dirName}/SKILL.md`, name: `SKILL.md`, content })
+      }
+    }
+
+    // ── 文件夹3: hooks/ — 三种 Agent 的 hooks 配置模板 ──
+    const hooksTemplateBase = path.join(app.isPackaged ? process.resourcesPath : app.getAppPath(), 'docs', 'hooks_templates')
+    // Cursor hooks
+    const cursorHooksDir = path.join(hooksTemplateBase, 'cursor')
+    if (fs.existsSync(cursorHooksDir)) {
+      // hooks.json
+      const hjPath = path.join(cursorHooksDir, 'hooks.json')
+      if (fs.existsSync(hjPath)) {
+        files.push({ path: 'hooks/cursor/hooks.json', name: 'hooks.json', content: fs.readFileSync(hjPath, 'utf-8') })
+      }
+      // hooks/codeboard_cursor_event.sh
+      const shDir = path.join(cursorHooksDir, 'hooks')
+      if (fs.existsSync(shDir)) {
+        for (const f of fs.readdirSync(shDir).filter(f => f.endsWith('.sh'))) {
+          files.push({ path: `hooks/cursor/hooks/${f}`, name: f, content: fs.readFileSync(path.join(shDir, f), 'utf-8') })
+        }
+      }
+    }
+    // Claude Code hooks
+    const ccHooksDir = path.join(hooksTemplateBase, 'claudecode')
+    if (fs.existsSync(ccHooksDir)) {
+      const sjPath = path.join(ccHooksDir, 'settings.json')
+      if (fs.existsSync(sjPath)) {
+        files.push({ path: 'hooks/claudecode/settings.json', name: 'settings.json', content: fs.readFileSync(sjPath, 'utf-8') })
+      }
+      const hDir = path.join(ccHooksDir, 'hooks')
+      if (fs.existsSync(hDir)) {
+        for (const f of fs.readdirSync(hDir).filter(f => f.endsWith('.sh'))) {
+          files.push({ path: `hooks/claudecode/hooks/${f}`, name: f, content: fs.readFileSync(path.join(hDir, f), 'utf-8') })
+        }
+      }
+    }
+    // OpenClaw hooks
+    const ocHooksDir = path.join(hooksTemplateBase, 'openclaw', 'codeboard-dashboard')
+    if (fs.existsSync(ocHooksDir)) {
+      for (const f of fs.readdirSync(ocHooksDir)) {
+        const fp = path.join(ocHooksDir, f)
+        if (fs.statSync(fp).isFile()) {
+          files.push({ path: `hooks/openclaw/codeboard-dashboard/${f}`, name: f, content: fs.readFileSync(fp, 'utf-8') })
+        }
+      }
     }
 
     return { success: true, files }
   })
 
-  // ---- Skills 目录保存：将完整 skills 包保存到用户选择的目录 ----
+  // ---- Skills 目录保存：两个子文件夹结构（rules + skills）----
   ipcMain.handle('save-skills-bundle', async (_, bundleFiles: { path: string; content: string }[]) => {
     if (!mainWindow) return { success: false }
     const result = await dialog.showOpenDialog(mainWindow, {
-      title: '选择 Skills 保存目录（将创建 codeboard/ 子目录）',
+      title: '选择保存目录（将创建 codeboard/ 根目录）',
       properties: ['openDirectory', 'createDirectory']
     })
     if (result.canceled || !result.filePaths.length) return { success: false }
 
-    const targetDir = path.join(result.filePaths[0], 'codeboard-cursor')
-    // 创建目录结构
-    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true })
-    const refsDir = path.join(targetDir, 'references')
-    if (!fs.existsSync(refsDir)) fs.mkdirSync(refsDir, { recursive: true })
+    const rootDir = path.join(result.filePaths[0], 'codeboard')
+    if (!fs.existsSync(rootDir)) fs.mkdirSync(rootDir, { recursive: true })
 
-    // 写入所有文件
     for (const file of bundleFiles) {
-      const filePath = path.join(targetDir, file.path)
+      const filePath = path.join(rootDir, file.path)
       const dir = path.dirname(filePath)
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
       fs.writeFileSync(filePath, file.content, 'utf-8')
+      // 对 .sh / .py 脚本自动加执行权限
+      if (file.path.endsWith('.sh') || file.path.endsWith('.py')) {
+        try { fs.chmodSync(filePath, 0o755) } catch { /* 忽略 */ }
+      }
     }
 
-    return { success: true, path: targetDir }
+    return { success: true, path: rootDir }
   })
 
   // ---- Session 垃圾篓操作 ----
@@ -473,13 +543,91 @@ function registerIpcHandlers() {
   })
 }
 
+/**
+ * 检测指定端口是否被占用，如果占用则获取占用进程的 PID
+ * 返回 PID 数组（可能有多个进程监听同一端口）
+ */
+async function getPortOccupyingPids(port: number): Promise<number[]> {
+  try {
+    const output = execSync(`lsof -ti tcp:${port} 2>/dev/null || true`, { encoding: 'utf-8' }).trim()
+    if (!output) return []
+    return output.split(/\s+/).map(Number).filter(pid => pid > 0 && pid !== process.pid)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * 终止指定 PID 列表中的所有进程
+ */
+function killPids(pids: number[]): void {
+  for (const pid of pids) {
+    try {
+      process.kill(pid, 'SIGTERM')
+      console.log(`[Main] 已发送 SIGTERM 到进程 ${pid}`)
+    } catch (err) {
+      console.warn(`[Main] 无法终止进程 ${pid}:`, (err as Error).message)
+      try { process.kill(pid, 'SIGKILL') } catch { /* 忽略 */ }
+    }
+  }
+}
+
 // ---- 应用启动 ----
 
 app.whenReady().then(async () => {
   registerIpcHandlers()
 
   const initialPort = currentPort
-  const PORT_TRY_MAX = 12 // 从 initialPort 起最多尝试连续端口数量
+
+  // 第一步：检测目标端口是否已有进程占用
+  const occupyingPids = await getPortOccupyingPids(initialPort)
+  if (occupyingPids.length > 0) {
+    console.log(`[Main] 端口 ${initialPort} 已被进程 [${occupyingPids.join(', ')}] 占用`)
+
+    // 尝试识别占用进程的名称，提供更友好的提示
+    let processInfo = ''
+    try {
+      const psOutput = execSync(
+        `ps -p ${occupyingPids.join(',')} -o pid=,comm= 2>/dev/null || true`,
+        { encoding: 'utf-8' }
+      ).trim()
+      if (psOutput) processInfo = `\n\n占用进程信息:\n${psOutput}`
+    } catch { /* 忽略 */ }
+
+    // 弹窗询问用户是否终止已有进程
+    const { response } = await dialog.showMessageBox({
+      type: 'warning',
+      title: 'CodeBoard 端口冲突',
+      message: `端口 ${initialPort} 已被其他程序占用`,
+      detail: `检测到端口 ${initialPort} 上有正在运行的程序（PID: ${occupyingPids.join(', ')}）。${processInfo}\n\n是否终止这些进程并使用端口 ${initialPort} 启动 CodeBoard？\n\n选择「终止并启动」将关闭占用进程后在该端口启动。\n选择「自动切换端口」将寻找其他可用端口。`,
+      buttons: ['终止并启动', '自动切换端口', '退出应用'],
+      defaultId: 0,
+      cancelId: 2
+    })
+
+    if (response === 2) {
+      // 用户选择退出
+      app.quit()
+      return
+    }
+
+    if (response === 0) {
+      // 用户选择终止占用进程
+      killPids(occupyingPids)
+      // 等待端口释放（最多 3 秒）
+      for (let i = 0; i < 6; i++) {
+        await new Promise(r => setTimeout(r, 500))
+        const remaining = await getPortOccupyingPids(initialPort)
+        if (remaining.length === 0) {
+          console.log(`[Main] 端口 ${initialPort} 已释放`)
+          break
+        }
+      }
+    }
+    // response === 1 时走后面的自动切换端口逻辑
+  }
+
+  const PORT_TRY_MAX = 12
 
   // 启动 API 服务器：先尝试当前端口；若占用则递增端口，避免与已运行的 CodeBoard/CLI 冲突
   let serverStarted = false
@@ -495,7 +643,6 @@ app.whenReady().then(async () => {
       if (health?.success) {
         serverStarted = true
         console.log(`[Main] API 服务器启动成功: ${apiUrl()}${p > 0 ? '（已自动切换端口）' : ''}`)
-        // 若因占用而换端口，写回设置，便于 Sidebar / CLI 一致
         if (p > 0) {
           try {
             await apiPut('/api/settings', { port: String(currentPort) })
@@ -509,13 +656,11 @@ app.whenReady().then(async () => {
   }
 
   if (serverStarted) {
-    // 从 API 读取保存的设置（host 等；port 已在上面与 currentPort 对齐）
     try {
       const r = await apiGet('/api/settings') as Record<string, unknown>
       const settings = r.data as Record<string, string>
       if (settings?.host) currentHost = settings.host
       const savedPort = settings?.port ? parseInt(settings.port, 10) : NaN
-      // 仅在当前实例已成功监听 savedPort 时采用，避免误切到未启动的端口
       if (!Number.isNaN(savedPort) && savedPort === currentPort) {
         currentPort = savedPort
       }
@@ -524,7 +669,6 @@ app.whenReady().then(async () => {
     console.error('[Main] API 服务器在可用端口范围内均未能启动，应用将以离线模式运行')
   }
 
-  // 无论服务器是否启动成功，都创建窗口（前端有空状态兜底）
   createWindow()
   createTray()
 

@@ -6,6 +6,10 @@
 此时 goal 可以先用用户消息的简要概述，task_list 可以为空，后续再更新。
 
 ```bash
+# 读取 Cursor 对话映射 ID（conversation_id + generation_id 精确关联本轮 hooks）
+CONV_ID=$(cat .dashboard/.current_session 2>/dev/null || echo "")
+GEN_ID=$(cat .dashboard/.current_generation 2>/dev/null || echo "")
+
 curl -X POST http://127.0.0.1:2585/api/tasks/update \
   -H "Content-Type: application/json" \
   -d '{
@@ -14,10 +18,14 @@ curl -X POST http://127.0.0.1:2585/api/tasks/update \
     "task_id": "task_<当前时间戳>",
     "type": "session_start",
     "goal": "用户需求的简要概述（从用户消息中提取）",
-    "task_list": []
+    "task_list": [],
+    "conversation_id": "'"$CONV_ID"'",
+    "generation_id": "'"$GEN_ID"'"
   }'
 ```
 
+> **hooks 映射**：Cursor Hooks 自动将 `conversation_id`（对话窗口 ID）和 `generation_id`（每轮消息 ID）分别写入 `.dashboard/.current_session` 和 `.dashboard/.current_generation`。session_start 携带这两个 ID，看板就能精确关联**本轮对话**的 hooks 事件到对应卡片。
+>
 > **为什么要先发送？** 看板需要立即收到 session_start 才能创建新的 Session 卡片。如果先做规划和读取记忆，看板会长时间停留在上一个 Session 的完成状态。
 
 ---

@@ -1,77 +1,113 @@
 ---
 name: codeboard-cursor
-description: Cursor hooks-first integration for CodeBoard. Use global ~/.cursor/hooks.json and keep legacy codeboard skill as fallback when hooks are unavailable.
+description: "Cursor hooks-first 接入方案。通过全局 hooks.json 自动上报全量事件到 CodeBoard 看板，仅首次初始化和任务规划需手动操作。"
 ---
 
-# CodeBoard Cursor Hooks Skill
+# CodeBoard — Cursor Hooks 接入方案
 
-> 这是 Cursor 的 **hooks 优先** 接入方案。  
-> 无 hooks 场景继续使用 `skills/codeboard/SKILL.md`（保留原流程，不冲突）。
+> 这是 Cursor 的 **hooks 优先** 接入方案。
+> 无 hooks 场景继续使用 `skills/codeboard/SKILL.md`（保留原全手动流程，不冲突）。
 
-## 目标
+## 核心原理
 
-- 通过 Cursor 官方 hooks 机制，自动把关键事件上报到 CodeBoard
-- 减少每轮对话手写 `curl` 的不稳定因素
-- 保留首次初始化的手动兜底流程
+通过 Cursor 官方 hooks 机制，将 **21 种** Agent 生命周期事件自动上报到 CodeBoard 看板：
 
-## 何时使用本 Skill
+- `sessionStart` → 自动触发 `session_start`（看板卡片出现）
+- `sessionEnd` → 自动触发 `session_complete`（看板标记完成）
+- 所有工具调用、文件操作、shell 命令等 → 全量记录到 `/api/hooks/events`
 
-- 你正在使用 Cursor Agent（Cmd+K / Agent Chat / Tab）
-- 你希望把 hooks 触发记录同步到 CodeBoard 看板
+## 安装步骤（全局，只需做一次）
 
-## 首次初始化（仅第一次）
+### 1. 安装 hooks.json
 
-> hooks 无法替代“项目首次注册”这一步。
+```bash
+# 从 CodeBoard 仓库复制模板
+cp docs/hooks_templates/cursor/hooks.json ~/.cursor/hooks.json
+```
 
-1. 在项目根创建 `.dashboard/project.yaml`（包含 `project_id`）。
-2. 调用 `POST /api/projects/register` 注册项目。
-3. 手动发送一次 `session_start`（保证第一张卡片出现）。
-4. 之后交由 hooks 自动上报。
+或手动创建 `~/.cursor/hooks.json`，内容包含全量 hook 事件映射。
 
-## 安装要求（全局）
+### 2. 安装 hook 脚本
 
-1. 将仓库模板 `docs/hooks_templates/cursor/hooks.json` 复制到：
-   - `~/.cursor/hooks.json`
-2. 将模板脚本目录 `docs/hooks_templates/cursor/hooks/` 复制到：
-   - `~/.cursor/hooks/`
-3. 给脚本执行权限：
-   - `chmod +x ~/.cursor/hooks/codeboard_cursor_event.sh`
-4. 可选环境变量（未设置时用默认值）：
-   - `CODEBOARD_API`（默认 `http://127.0.0.1:2585`）
+```bash
+mkdir -p ~/.cursor/hooks
+cp docs/hooks_templates/cursor/hooks/codeboard_cursor_event.sh ~/.cursor/hooks/
+chmod +x ~/.cursor/hooks/codeboard_cursor_event.sh
+```
 
-## 上报策略（Cursor）
+### 3. 验证安装
 
-- `sessionStart`：自动触发 `session_start`（仅当读取到项目 `project_id`）
-- 全量 hooks 都会同步到 `POST /api/hooks/events`（保持工具调用独立轨迹）
-- **不再**通过 ToolUse hooks 推导 `task_start/task_complete/session_complete`
+打开 Cursor → 设置 → Hooks 选项卡 → 确认所有 hooks 已加载。
 
-## 仍需 Agent 手动执行（不可省略）
+## 首次初始化（每个新项目做一次）
 
-> `task` 代表 Session 规划任务，不等于工具调用，以下必须由 Agent 按语义手动上报：
+> hooks 无法替代"项目首次注册"。未完成初始化的项目，hooks 会静默跳过所有上报。
 
-1. **规划完成后**：手动再发一次 `session_start`，带“人工确认后的完整 `task_list`”
-2. **每个规划任务开始时**：手动发 `task_start`
-3. **每个规划任务完成时**：手动发 `task_complete`
-4. **所有规划任务完成后**：手动发 `session_complete(summary)`
-5. **记忆收录**：更新 `.dashboard/memories/` 9 类文档并调用 `/api/memories/<project_id>/sync`
+### 自动检测
 
-## 覆盖的官方 hooks（全量）
+```bash
+python3 ~/.cursor/skills/codeboard/scripts/init_project_judge.py
+# 或项目内: python3 skills/codeboard/scripts/init_project_judge.py
+```
 
-- Agent 生命周期：`sessionStart` `sessionEnd` `stop` `preCompact`
-- 通用工具：`preToolUse` `postToolUse` `postToolUseFailure`
-- 子代理：`subagentStart` `subagentStop`
-- Shell/MCP：`beforeShellExecution` `afterShellExecution` `beforeMCPExecution` `afterMCPExecution`
-- 文件与提交：`beforeReadFile` `afterFileEdit` `beforeSubmitPrompt`
-- 输出观察：`afterAgentResponse` `afterAgentThought`
-- Tab：`beforeTabFileRead` `afterTabFileEdit`
+### 手动初始化
 
-## 无 hooks 回退（必须保留）
+1. **创建项目配置**:
 
-若你无法使用 hooks（例如受限环境）：
+```bash
+mkdir -p .dashboard/memories
+```
 
-- 继续启用 `skills/codeboard/SKILL.md`
-- 按原流程手动执行：
-  - 对话开始先 `session_start`
-  - 每任务 `task_start -> task_complete`
-  - 收尾 `session_complete + memories sync`
+创建 `.dashboard/project.yaml`:
 
+```yaml
+project_name: "你的项目名称"
+project_description: "项目简要描述"
+project_id: "proj_<当前时间戳>"
+created_at: "<ISO 时间>"
+```
+
+2. **注册项目**:
+
+```bash
+curl -s -X POST http://127.0.0.1:2585/api/projects/register \
+  -H "Content-Type: application/json" \
+  -d '{"project_id":"<project_id>","name":"项目名称","description":"项目描述"}'
+```
+
+3. **验证**: `curl -s -X POST http://127.0.0.1:2585/api/projects/<project_id>/test` → 返回 `{"available": true}`
+
+4. 首次手动发送一次 `session_start`（保证第一张卡片出现），之后由 hooks 自动触发。
+
+## Agent 仍需手动执行的操作
+
+> hooks 自动处理了 session 生命周期和事件轨迹，但以下 **规划级任务** 仍需 Agent 手动上报：
+
+| 步骤 | 时机 | API |
+|------|------|-----|
+| 补发 task_list | 规划完成后 | `POST /api/tasks/update` type=session_start，带 task_list |
+| task_start | 每个规划任务开始时 | `POST /api/tasks/update` type=task_start |
+| task_complete | 每个规划任务完成时 | `POST /api/tasks/update` type=task_complete |
+| session_complete | 所有任务完成后 | `POST /api/tasks/update` type=session_complete，带 summary |
+| 记忆收录 | session 结束前 | 更新 `.dashboard/memories/` + `POST /api/memories/<pid>/sync` |
+
+## Hooks 覆盖的全量事件（21 种）
+
+**Agent 生命周期**: sessionStart, sessionEnd, stop, preCompact
+**通用工具**: preToolUse, postToolUse, postToolUseFailure
+**子代理**: subagentStart, subagentStop
+**Shell/MCP**: beforeShellExecution, afterShellExecution, beforeMCPExecution, afterMCPExecution
+**文件操作**: beforeReadFile, afterFileEdit
+**提交审查**: beforeSubmitPrompt
+**输出观察**: afterAgentResponse, afterAgentThought
+**Tab 补全**: beforeTabFileRead, afterTabFileEdit
+
+## 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `CODEBOARD_API` | `http://127.0.0.1:2585` | CodeBoard API 地址 |
+
+## 无 hooks 回退
+
+若无法使用 hooks（受限环境），继续启用 `skills/codeboard/SKILL.md`，按原全手动流程运行。

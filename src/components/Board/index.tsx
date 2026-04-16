@@ -148,6 +148,21 @@ export default function Board() {
               projectId={expandedProjectData.project_id}
               projectName={expandedProjectData.name}
               sessionId={selectedSessionId}
+              onSwitchSession={setSelectedSessionId}
+              cursorConversationId={
+                selectedSessionId
+                  ? sessionsByProject[expandedProjectData.project_id]?.find(
+                      s => s.session_id === selectedSessionId
+                    )?.cursor_conversation_id
+                  : undefined
+              }
+              cursorGenerationId={
+                selectedSessionId
+                  ? sessionsByProject[expandedProjectData.project_id]?.find(
+                      s => s.session_id === selectedSessionId
+                    )?.cursor_generation_id
+                  : undefined
+              }
             />
           </motion.div>
         </div>

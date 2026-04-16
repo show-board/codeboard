@@ -158,8 +158,23 @@ npx node-gyp rebuild \
 
 ## Configure AI Agents
 
-CodeBoard uses Skill files to guide AI Agents in automatically connecting to the kanban. It supports various agents:
+CodeBoard uses **Hooks** (recommended) + **Skills** to automatically sync AI Agents with the kanban.
 
+### Hooks — Automatic Event Reporting
+
+Hooks run silently in the background, capturing Agent lifecycle events and pushing them to CodeBoard in real-time.
+
+| Agent        | Config Location                       | Events | Install Command |
+| ------------ | ------------------------------------- | ------ | --------------- |
+| Cursor       | `~/.cursor/hooks.json`                | 21     | `cp docs/hooks_templates/cursor/hooks.json ~/.cursor/hooks.json` |
+| Claude Code  | `~/.claude/settings.json` (hooks key) | 9      | Merge `docs/hooks_templates/claudecode/settings.json` |
+| OpenClaw     | `~/.openclaw/hooks/` directory        | 13     | `openclaw hooks enable codeboard-dashboard` |
+
+Each hook script writes the current `conversation_id` to `.dashboard/.current_session` on session start, ensuring hooks and manual Agent reports merge into the same kanban card.
+
+### Skills — Project Init & Task Planning
+
+Skills guide Agents on project initialization and structured task reporting. Hooks handle session lifecycle automatically, but Agents still need Skills for task-level planning (`task_start` / `task_complete` / `session_complete`).
 
 | Agent        | Installation Guide                                               |
 | ------------ | ---------------------------------------------------------------- |
@@ -170,6 +185,8 @@ CodeBoard uses Skill files to guide AI Agents in automatically connecting to the
 > Skill strategy:
 > - hooks-first skills: `skills/codeboard-cursor`, `skills/codeboard-claudecode`, `skills/codeboard-openclaw`
 > - no-hooks fallback: `skills/codeboard`
+
+Use the **magic wand** button in the app to generate a complete bundle (rules + skills + hooks configs) for download.
 
 
 ---
@@ -205,7 +222,11 @@ codeboard/
 │   ├── ARCHITECTURE.md    # Architecture design
 │   ├── INSTALL.md         # Installation guide
 │   ├── AGENT-SETUP-*.md   # Agent setup guides
-│   └── HOOKS-EVENT-MAPPING.md  # Hooks mapping and metrics scope
+│   ├── HOOKS-EVENT-MAPPING.md  # Hooks mapping and metrics scope
+│   └── hooks_templates/   # Hooks config templates
+│       ├── cursor/        # ~/.cursor/hooks.json + script
+│       ├── claudecode/    # ~/.claude/settings.json + script
+│       └── openclaw/      # HOOK.md + handler.ts
 └── test/                  # Test scripts
 ```
 

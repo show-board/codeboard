@@ -16,6 +16,7 @@ router.post('/events', (req: Request, res: Response) => {
     agent_type,
     hook_event_name,
     status,
+    description,
     payload
   } = req.body
 
@@ -47,10 +48,18 @@ router.post('/events', (req: Request, res: Response) => {
     agent_type,
     hook_event_name,
     status: status === 'error' ? 'error' : 'success',
+    description: typeof description === 'string' ? description : undefined,
     payload: typeof payload === 'object' && payload !== null ? payload : {}
   })
 
   res.json(result)
+})
+
+/** GET /api/hooks/project/:projectId/session-counts - 项目级 hooks 计数（前端卡片徽章用） */
+router.get('/project/:projectId/session-counts', (req: Request, res: Response) => {
+  const projectId = req.params.projectId
+  const counts = db.getHookSessionCountsByProject(projectId)
+  res.json({ success: true, data: counts })
 })
 
 /** GET /api/hooks/sessions/:sessionId - 获取某个 session 的 hooks 统计与明细 */

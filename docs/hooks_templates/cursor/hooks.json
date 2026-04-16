@@ -2,105 +2,64 @@
   "version": 1,
   "hooks": {
     "sessionStart": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh sessionStart"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh sessionStart" }
     ],
     "sessionEnd": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh sessionEnd"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh sessionEnd" }
     ],
     "preToolUse": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh preToolUse"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh preToolUse" }
     ],
     "postToolUse": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh postToolUse"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh postToolUse" }
     ],
     "postToolUseFailure": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh postToolUseFailure"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh postToolUseFailure" }
     ],
     "subagentStart": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh subagentStart"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh subagentStart" }
     ],
     "subagentStop": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh subagentStop"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh subagentStop" }
     ],
     "beforeShellExecution": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh beforeShellExecution"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh beforeShellExecution" }
     ],
     "afterShellExecution": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh afterShellExecution"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh afterShellExecution" }
     ],
     "beforeMCPExecution": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh beforeMCPExecution"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh beforeMCPExecution" }
     ],
     "afterMCPExecution": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh afterMCPExecution"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh afterMCPExecution" }
     ],
     "beforeReadFile": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh beforeReadFile"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh beforeReadFile" }
     ],
     "afterFileEdit": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh afterFileEdit"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh afterFileEdit" }
     ],
     "beforeSubmitPrompt": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh beforeSubmitPrompt"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh beforeSubmitPrompt" }
     ],
     "preCompact": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh preCompact"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh preCompact" }
     ],
     "stop": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh stop"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh stop" }
     ],
     "afterAgentResponse": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh afterAgentResponse"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh afterAgentResponse" }
     ],
     "afterAgentThought": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh afterAgentThought"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh afterAgentThought" }
     ],
     "beforeTabFileRead": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh beforeTabFileRead"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh beforeTabFileRead" }
     ],
     "afterTabFileEdit": [
-      {
-        "command": "～/.cursor/hooks/codeboard_cursor_event.sh afterTabFileEdit"
-      }
+      { "command": "./hooks/codeboard_cursor_event.sh afterTabFileEdit" }
     ]
   }
 }
-

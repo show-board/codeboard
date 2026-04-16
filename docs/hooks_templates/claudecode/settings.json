@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/codeboard_claude_event.sh PreToolUse"
+            "command": "~/.claude/hooks/codeboard_cc_event.sh"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/codeboard_claude_event.sh PostToolUse"
+            "command": "~/.claude/hooks/codeboard_cc_event.sh"
           }
         ]
       }
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/codeboard_claude_event.sh Notification"
+            "command": "~/.claude/hooks/codeboard_cc_event.sh"
           }
         ]
       }
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/codeboard_claude_event.sh UserPromptSubmit"
+            "command": "~/.claude/hooks/codeboard_cc_event.sh"
           }
         ]
       }
@@ -47,7 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/codeboard_claude_event.sh Stop"
+            "command": "~/.claude/hooks/codeboard_cc_event.sh"
           }
         ]
       }
@@ -57,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/codeboard_claude_event.sh SubagentStop"
+            "command": "~/.claude/hooks/codeboard_cc_event.sh"
           }
         ]
       }
@@ -67,7 +67,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/codeboard_claude_event.sh PreCompact"
+            "command": "~/.claude/hooks/codeboard_cc_event.sh"
           }
         ]
       }
@@ -77,7 +77,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/codeboard_claude_event.sh SessionStart"
+            "command": "~/.claude/hooks/codeboard_cc_event.sh"
           }
         ]
       }
@@ -87,11 +87,10 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/codeboard_claude_event.sh SessionEnd"
+            "command": "~/.claude/hooks/codeboard_cc_event.sh"
           }
         ]
       }
     ]
   }
 }
-

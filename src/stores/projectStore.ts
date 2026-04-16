@@ -29,6 +29,12 @@ interface Session {
   prompt_text?: string
   created_at: string
   updated_at: string
+  /** 该 session 关联的 hook_events 数量（后端通过映射统计） */
+  hook_events_count?: number
+  /** 映射到 Cursor 对话的 conversation_id（整个对话窗口 ID） */
+  cursor_conversation_id?: string
+  /** 映射到 Cursor 对话的 generation_id（具体轮次 ID） */
+  cursor_generation_id?: string
 }
 
 /** 任务更新数据 */

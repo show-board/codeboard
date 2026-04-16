@@ -6,7 +6,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, BookOpen, Terminal, Palette, MessageSquare, Puzzle } from 'lucide-react'
+import { X, BookOpen, Terminal, Palette, MessageSquare, Puzzle, Webhook } from 'lucide-react'
 import { useUIStore } from '../../stores/uiStore'
 import GlassCard from '../common/GlassCard'
 import BlurOverlay from '../common/BlurOverlay'
@@ -14,6 +14,7 @@ import BlurOverlay from '../common/BlurOverlay'
 /** 帮助页签定义 */
 const TABS = [
   { id: 'overview', label: '概览', icon: BookOpen },
+  { id: 'hooks', label: 'Hooks 机制', icon: Webhook },
   { id: 'cursor', label: 'Cursor', icon: Terminal },
   { id: 'claude', label: 'Claude Code', icon: Terminal },
   { id: 'openclaw', label: 'OpenClaw', icon: Puzzle },
@@ -100,6 +101,8 @@ function TabContent({ tabId }: { tabId: TabId }) {
   switch (tabId) {
     case 'overview':
       return <OverviewContent />
+    case 'hooks':
+      return <HooksContent />
     case 'cursor':
       return <CursorContent />
     case 'claude':
@@ -130,6 +133,237 @@ function CodeBlock({ children }: { children: string }) {
     <pre className="text-xs bg-gray-100 dark:bg-gray-800 rounded-xl p-4 font-mono text-gray-700 dark:text-gray-300 overflow-x-auto mb-4 whitespace-pre-wrap">
       {children}
     </pre>
+  )
+}
+
+/** 三栏 Hooks 机制说明 */
+function HooksContent() {
+  return (
+    <div>
+      <SectionTitle>Hooks 运行机制</SectionTitle>
+      <Paragraph>
+        CodeBoard 通过各 Agent 的官方 hooks 机制自动上报事件，无需 Agent 每次手动 curl。
+        hooks 在后台静默运行，将 Agent 生命周期中的所有关键事件实时推送到看板。
+      </Paragraph>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        {/* ---- Cursor 栏 ---- */}
+        <div className="border border-purple-200 dark:border-purple-800/50 rounded-xl p-4 bg-purple-50/30 dark:bg-purple-900/10">
+          <h4 className="text-sm font-bold text-purple-700 dark:text-purple-400 mb-3 flex items-center gap-2">
+            <Terminal className="w-4 h-4" /> Cursor
+          </h4>
+
+          <div className="space-y-3 text-xs text-gray-600 dark:text-gray-400">
+            <div>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">触发方式：</span>
+              <span>在 <code className="text-purple-600 dark:text-purple-400">~/.cursor/hooks.json</code> 中配置。
+              Cursor 在 Agent 执行时自动按事件类型调用对应的 shell 脚本，通过 stdin 传入 JSON 数据。</span>
+            </div>
+
+            <div>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">传入信息：</span>
+              <span>conversation_id（跨轮稳定的会话 ID）、model、tool_name、tool_input、command、
+              file_path、duration、status、input/output_tokens 等。不同事件携带的字段不同。</span>
+            </div>
+
+            <div>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">覆盖事件（21 种）：</span>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {['sessionStart', 'sessionEnd', 'stop', 'preToolUse', 'postToolUse',
+                  'postToolUseFailure', 'subagentStart', 'subagentStop',
+                  'beforeShellExecution', 'afterShellExecution',
+                  'beforeMCPExecution', 'afterMCPExecution',
+                  'beforeReadFile', 'afterFileEdit', 'beforeSubmitPrompt',
+                  'preCompact', 'afterAgentResponse', 'afterAgentThought',
+                  'beforeTabFileRead', 'afterTabFileEdit'].map(e => (
+                  <span key={e} className="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-800/30 rounded text-[10px] text-purple-700 dark:text-purple-300">{e}</span>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">自定义：</span>
+              <span>可用 <code>matcher</code> 按工具名/命令模式过滤（如仅匹配 Shell 命令）；
+              可设 <code>timeout</code>、<code>failClosed</code>、<code>loop_limit</code>。</span>
+            </div>
+
+            <div>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">查看方式：</span>
+              <span>Cursor → 设置 → Hooks 选项卡 → 可看已加载/已执行的 hooks 和错误日志。</span>
+            </div>
+
+            <div className="mt-2 p-2 bg-purple-100/50 dark:bg-purple-800/20 rounded-lg">
+              <span className="font-semibold text-gray-700 dark:text-gray-300">示例：</span>
+              <pre className="mt-1 text-[10px] whitespace-pre-wrap font-mono">{`// hooks.json 片段
+{
+  "hooks": {
+    "postToolUse": [{
+      "command": "./hooks/codeboard_cursor_event.sh postToolUse"
+    }]
+  }
+}
+
+// 该 hook 收到的 stdin JSON:
+{
+  "tool_name": "Shell",
+  "tool_input": { "command": "npm test" },
+  "tool_output": "All tests passed",
+  "duration": 5432,
+  "conversation_id": "bf6a...",
+  "model": "claude-4.6-opus"
+}`}</pre>
+            </div>
+          </div>
+        </div>
+
+        {/* ---- Claude Code 栏 ---- */}
+        <div className="border border-blue-200 dark:border-blue-800/50 rounded-xl p-4 bg-blue-50/30 dark:bg-blue-900/10">
+          <h4 className="text-sm font-bold text-blue-700 dark:text-blue-400 mb-3 flex items-center gap-2">
+            <Terminal className="w-4 h-4" /> Claude Code
+          </h4>
+
+          <div className="space-y-3 text-xs text-gray-600 dark:text-gray-400">
+            <div>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">触发方式：</span>
+              <span>在 <code className="text-blue-600 dark:text-blue-400">~/.claude/settings.json</code> 的 hooks 块配置。
+              按 matcher 匹配工具名（区分大小写），匹配时执行 command。JSON 通过 stdin 传入。</span>
+            </div>
+
+            <div>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">传入信息：</span>
+              <span>session_id、transcript_path、cwd、tool_name、tool_input、tool_response、
+              prompt（UserPromptSubmit）、message（Notification）、source（SessionStart）等。</span>
+            </div>
+
+            <div>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">覆盖事件（9 种）：</span>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {['PreToolUse', 'PostToolUse', 'Notification', 'UserPromptSubmit',
+                  'Stop', 'SubagentStop', 'PreCompact', 'SessionStart', 'SessionEnd'].map(e => (
+                  <span key={e} className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-800/30 rounded text-[10px] text-blue-700 dark:text-blue-300">{e}</span>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">自定义：</span>
+              <span>matcher 支持正则（如 <code>Edit|Write</code>）；<code>*</code> 匹配所有工具；
+              可设 <code>timeout</code> 超时。退出码 0=成功，2=阻止操作。</span>
+            </div>
+
+            <div>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">查看方式：</span>
+              <span>运行 <code>claude --debug</code> 查看详细 hook 执行日志；
+              或 <code>/hooks</code> 命令查看已注册的 hooks。</span>
+            </div>
+
+            <div className="mt-2 p-2 bg-blue-100/50 dark:bg-blue-800/20 rounded-lg">
+              <span className="font-semibold text-gray-700 dark:text-gray-300">示例：</span>
+              <pre className="mt-1 text-[10px] whitespace-pre-wrap font-mono">{`// settings.json 片段
+{
+  "hooks": {
+    "PostToolUse": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "~/.claude/hooks/codeboard_cc_event.sh"
+      }]
+    }]
+  }
+}
+
+// 该 hook 收到的 stdin JSON:
+{
+  "session_id": "abc123",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": { "file_path": "/src/app.ts" },
+  "tool_response": { "success": true }
+}`}</pre>
+            </div>
+          </div>
+        </div>
+
+        {/* ---- OpenClaw 栏 ---- */}
+        <div className="border border-emerald-200 dark:border-emerald-800/50 rounded-xl p-4 bg-emerald-50/30 dark:bg-emerald-900/10">
+          <h4 className="text-sm font-bold text-emerald-700 dark:text-emerald-400 mb-3 flex items-center gap-2">
+            <Puzzle className="w-4 h-4" /> OpenClaw
+          </h4>
+
+          <div className="space-y-3 text-xs text-gray-600 dark:text-gray-400">
+            <div>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">触发方式：</span>
+              <span>每个 hook 是一个 <code className="text-emerald-600 dark:text-emerald-400">HOOK.md + handler.ts</code> 目录。
+              在 HOOK.md 的 metadata.openclaw.events 中声明要监听的事件。
+              Gateway 运行时自动发现并调用 handler 函数。</span>
+            </div>
+
+            <div>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">传入信息：</span>
+              <span>event 对象包含 type、action、sessionKey、timestamp、messages、
+              context（含 workspaceDir、commandSource、from、channelId、tokenCount 等）。</span>
+            </div>
+
+            <div>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">覆盖事件（13 种）：</span>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {['command:new', 'command:reset', 'command:stop', 'command',
+                  'session:compact:before', 'session:compact:after', 'session:patch',
+                  'agent:bootstrap', 'gateway:startup',
+                  'message:received', 'message:transcribed',
+                  'message:preprocessed', 'message:sent'].map(e => (
+                  <span key={e} className="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-800/30 rounded text-[10px] text-emerald-700 dark:text-emerald-300">{e}</span>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">自定义：</span>
+              <span>requires 可声明依赖（bins、env、config）；os 可限制平台；
+              env 可为 hook 传入自定义环境变量。</span>
+            </div>
+
+            <div>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">查看方式：</span>
+              <span><code>openclaw hooks list</code> 列出所有 hooks；
+              <code>openclaw hooks info codeboard-dashboard</code> 查看详情；
+              <code>openclaw hooks check</code> 验证资格。</span>
+            </div>
+
+            <div className="mt-2 p-2 bg-emerald-100/50 dark:bg-emerald-800/20 rounded-lg">
+              <span className="font-semibold text-gray-700 dark:text-gray-300">示例：</span>
+              <pre className="mt-1 text-[10px] whitespace-pre-wrap font-mono">{`// handler.ts（导出默认函数）
+export default async function(event) {
+  // event 结构:
+  {
+    type: "command",
+    action: "new",
+    sessionKey: "sess_abc123",
+    timestamp: "2026-04-15T...",
+    context: {
+      workspaceDir: "/path/to/project",
+      commandSource: "cli"
+    },
+    messages: []  // push 后发给用户
+  }
+}`}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <SectionTitle>CodeBoard 如何处理 Hook 事件</SectionTitle>
+      <Paragraph>
+        所有 hook 脚本将事件异步 POST 到 <code className="text-violet-600 dark:text-violet-400">/api/hooks/events</code>，
+        包含 project_id、session_id、hook_event_name、description（人类可读描述）和 payload（结构化数据）。
+        看板实时接收并展示在 Session 卡片的事件时间线中。
+      </Paragraph>
+      <Paragraph>
+        <strong>session_id 统一机制：</strong>hook 脚本在 sessionStart 时会将 conversation_id 写入{' '}
+        <code className="text-violet-600 dark:text-violet-400">.dashboard/.current_session</code> 文件。
+        Agent 手动发 curl 时优先读取此文件，确保 hooks 和手动上报使用相同的 session_id，合并到同一张卡片。
+      </Paragraph>
+    </div>
   )
 }
 

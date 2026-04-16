@@ -74,19 +74,66 @@ pnpm dist
 
 打包完成后，安装包位于 `release/` 目录。
 
-### 6. 配置 Agent（Skills + Rules）
+### 6. 安装 Hooks（推荐，自动上报）
 
-要让 AI Agent 稳定对接看板，**仅装应用不够**，还需在业务项目中配置 Rules 与 Skills：
+CodeBoard 支持通过 Cursor / Claude Code / OpenClaw 的官方 hooks 机制**自动上报**全量 Agent 事件。安装 hooks 后，Agent 的 session 生命周期、工具调用、shell 命令等都会自动推送到看板，极大减少手动 curl 的操作。
 
-| 场景 | 文档 |
-|------|------|
-| **Cursor**（推荐先看） | [AGENT-SETUP-CURSOR.md](AGENT-SETUP-CURSOR.md) — `~/.cursor/skills/` 符号链接、`alwaysApply` Rules、API 基址与左侧面板一致 |
-| Claude Code | [AGENT-SETUP-CLAUDECODE.md](AGENT-SETUP-CLAUDECODE.md) |
-| OpenClaw | [AGENT-SETUP-OPENCLEW.md](AGENT-SETUP-OPENCLEW.md) |
+#### Cursor Hooks
 
-应用内 **魔法棒** 可生成带当前 Host:Port 的单文件 `SKILL.md`；完整分章说明仍以仓库 `skills/codeboard/` 为准。
+```bash
+# 1. 复制 hooks 配置
+cp docs/hooks_templates/cursor/hooks.json ~/.cursor/hooks.json
 
-### 7. 记忆同步注意事项
+# 2. 复制 hook 脚本
+mkdir -p ~/.cursor/hooks
+cp docs/hooks_templates/cursor/hooks/codeboard_cursor_event.sh ~/.cursor/hooks/
+chmod +x ~/.cursor/hooks/codeboard_cursor_event.sh
+
+# 3. 验证: Cursor → 设置 → Hooks 选项卡 → 确认 21 种事件已加载
+```
+
+#### Claude Code Hooks
+
+```bash
+# 1. 复制 hook 脚本
+mkdir -p ~/.claude/hooks
+cp docs/hooks_templates/claudecode/hooks/codeboard_cc_event.sh ~/.claude/hooks/
+chmod +x ~/.claude/hooks/codeboard_cc_event.sh
+
+# 2. 将 hooks 配置合并到 settings.json
+# 模板: docs/hooks_templates/claudecode/settings.json
+# 如果已有 ~/.claude/settings.json，请手动合并 hooks 块
+
+# 3. 验证: claude --debug → 查看 hook 执行日志
+```
+
+#### OpenClaw Hooks
+
+```bash
+# 1. 复制 hook 目录
+cp -r docs/hooks_templates/openclaw/codeboard-dashboard ~/.openclaw/hooks/
+
+# 2. 启用
+openclaw hooks enable codeboard-dashboard
+
+# 3. 验证: openclaw hooks check
+```
+
+> **session_id 统一机制**：hook 脚本在 sessionStart 时会将 `conversation_id` 写入 `.dashboard/.current_session` 文件。Agent 手动发 curl 时应优先读取此文件，确保 hooks 和手动上报合并到同一张看板卡片。
+
+### 7. 配置 Agent（Skills + Rules）
+
+安装 hooks 后仍需配置 Skills（用于项目初始化和任务规划上报）和 Rules：
+
+| 场景 | 文档 | Hooks |
+|------|------|-------|
+| **Cursor**（推荐先看） | [AGENT-SETUP-CURSOR.md](AGENT-SETUP-CURSOR.md) | 21 种全量事件 |
+| Claude Code | [AGENT-SETUP-CLAUDECODE.md](AGENT-SETUP-CLAUDECODE.md) | 9 种事件 |
+| OpenClaw | [AGENT-SETUP-OPENCLEW.md](AGENT-SETUP-OPENCLEW.md) | 13 种事件 |
+
+应用内 **魔法棒** 可生成完整目录包（rules + skills + hooks 配置文件），一键保存到本地。
+
+### 8. 记忆同步注意事项
 
 使用 CLI 同步本地 `.dashboard/memories/` 时，请在**业务项目根目录**执行（该目录下须有 `.dashboard/memories`）：
 

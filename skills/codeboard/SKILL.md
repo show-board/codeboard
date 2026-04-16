@@ -16,10 +16,74 @@ description: Syncs AI agent work with the CodeBoard dashboard via HTTP API (sess
 
 ---
 
+## Step 0: 项目初始化检查（首次接入必做）
+
+> 每次对话开始时，**必须先确认项目已完成初始化**。如果项目从未接入过 CodeBoard，需要完成以下初始化步骤。
+
+### 检查方式
+
+运行初始化检测脚本（如果 Skill 目录下存在 `scripts/init_project_judge.py`）:
+
+```bash
+python3 ~/.cursor/skills/codeboard/scripts/init_project_judge.py
+# 或者在仓库内: python3 skills/codeboard/scripts/init_project_judge.py
+```
+
+如果脚本不存在，则手动检查以下内容：
+
+### 手动检查清单
+
+1. **检查 `.dashboard/project.yaml` 是否存在**:
+
+```bash
+cat .dashboard/project.yaml 2>/dev/null || echo "NOT_FOUND"
+```
+
+2. **如果不存在（首次初始化）**，创建完整的项目配置:
+
+```bash
+mkdir -p .dashboard/memories
+```
+
+```yaml
+# .dashboard/project.yaml
+project_name: "你的项目名称"
+project_description: "项目简要描述"
+project_id: "proj_<当前时间戳>"  # 例如 proj_20260415120000，创建后不可修改
+created_at: "2026-04-15T12:00:00+08:00"
+```
+
+3. **向 CodeBoard 注册项目**:
+
+```bash
+curl -s -X POST http://127.0.0.1:2585/api/projects/register \
+  -H "Content-Type: application/json" \
+  -d '{"project_id":"proj_<时间戳>","name":"项目名称","description":"项目描述"}'
+```
+
+如果返回 `{"success": false, "error": "项目 ID 或名称已存在"}`，更换 project_id 中的时间戳后重试。
+
+4. **验证注册成功**:
+
+```bash
+curl -s -X POST http://127.0.0.1:2585/api/projects/<project_id>/test
+```
+
+返回 `{"available": true}` 表示项目已正确注册。
+
+5. **如果已存在 `project.yaml`**，读取 `project_id` 并测试连接。若 `/test` 返回项目不存在，则重新发送注册请求。
+
+### 首次初始化额外步骤
+
+对于全新项目，初始化完成后还需创建 9 个基础记忆文件（见下方「记忆系统」章节），并通过 `/api/memories/<project_id>/sync` 推送到看板。
+
+---
+
 ## 执行流程概览（严格按序执行）
 
 ```
 【对话开始后立即执行】
+  Step 0: ★ 检查项目初始化状态（首次接入必做）
   Step 1: 检查 .dashboard/project.yaml → 确认项目已注册
   Step 2: ★ 立即发送 session_start → 看板出现新卡片
   Step 3: 读取记忆（必读 vibe-config）

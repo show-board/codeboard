@@ -73,12 +73,24 @@ EOF
 curl -s -X POST http://127.0.0.1:2585/api/projects/register \
   -H "Content-Type: application/json" \
   -d '{"project_id":"proj_<时间戳>","name":"你的项目名","description":"你的项目描述"}'
-
-# 首次 session_start（只需手动一次）
-curl -s -X POST http://127.0.0.1:2585/api/tasks/update \
-  -H "Content-Type: application/json" \
-  -d '{"project_id":"proj_<时间戳>","session_id":"sess_<时间戳>","task_id":"task_<时间戳>","type":"session_start","goal":"初始化接入","task_list":[]}'
 ```
+
+> 首次 `session_start` 会由 hooks 在新对话开始时自动发送，无需手动操作。
+
+---
+
+## 3.5）session_id 统一机制（重要）
+
+hooks 使用 Cursor 的 `conversation_id` 作为 session_id，而 Agent 手动 curl 时可能使用不同 ID。
+**hook 脚本在 `sessionStart` 时会将 conversation_id 写入** `.dashboard/.current_session` 文件。
+
+Agent（或 SKILL.md 流程）在手动发送 task_start/task_complete/session_complete 时，**必须优先读取此文件**：
+
+```bash
+SESSION_ID=$(cat .dashboard/.current_session 2>/dev/null || echo "sess_$(date +%Y%m%d%H%M%S)")
+```
+
+这样 hooks 自动上报和 Agent 手动上报会合并到同一张看板卡片中。
 
 ---
 

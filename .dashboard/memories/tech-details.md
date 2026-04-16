@@ -94,6 +94,36 @@
 - 完成时间 = Agent 手动上报 `task_complete` 的时间（服务端 `created_at`）
 - 总结信息 = Agent 在 `task_summary` / `session_complete.summary` 中人工给出的语义总结
 
+## 服务器架构关键点
+
+- **双服务器文件**: `electron/main/server/index.ts`（路由定义）和 `electron/main/server/standalone.ts`（实际运行的独立子进程服务器）
+- **⚠️ 重要**: `standalone.ts` 是通过 `child_process` 作为独立 Node.js 子进程运行的，`index.ts` 中的路由改动**不会自动生效**
+- **修改规则**: 所有后端 API 修改必须**同时更新** `standalone.ts`，否则 dev 模式下不会生效
+- **构建缓存**: electron-vite 可能缓存旧的 build，重启前建议 `rm -rf out` 清理
+
+## hooks 关联机制（conversation_id + generation_id 双重映射）
+
+- **核心问题**: Cursor 的 `session_id`（= `conversation_id`）与 codeboard 的 `sess_xxx` 不同
+- **关键概念**:
+  - `conversation_id`: 整个对话窗口的稳定 ID（不变）
+  - `generation_id`: 每轮用户消息的唯一 ID（每次发消息都不同）
+  - codeboard session ↔ (conversation_id, generation_id) 一一对应
+- **解决方案**: `sessions` 表增加 `cursor_conversation_id` + `cursor_generation_id`；`hook_events` 表增加 `generation_id` 列
+- **映射流程**:
+  1. Hook 脚本将 `conversation_id` 写入 `.dashboard/.current_session`
+  2. Hook 脚本将 `generation_id` 写入 `.dashboard/.current_generation`
+  3. Agent 发送 `session_start` 时携带两个 ID
+  4. 后端按 (conversation_id + generation_id) 精确匹配本轮的 hooks
+- **API**: `GET /api/hooks/sessions/:sid` 自动检查映射，有 gen_id 则精确匹配轮次
+- **防重复**: 收到 hook 事件时，如已有映射的手动 session，不再自动创建 session
+
+## hooks 前端展示
+
+- `ExpandedHooksPanel.tsx`: 全屏右侧 hooks 统计面板，5 秒轮询刷新，头部显示映射关系
+- `SessionCard`: 内联显示 hooks 活动指示器 + 紫色计数徽章 + 映射 conversation_id
+- API `/api/hooks/project/:projectId/session-counts`: 项目级 hooks 计数
+- API `/api/hooks/sessions/:sessionId`: session 级 hooks 统计 + 明细（自动通过映射查询）
+
 ## 构建与打包
 
 - 开发：`pnpm dev` → electron-vite dev
